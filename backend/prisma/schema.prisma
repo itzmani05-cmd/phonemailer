@@ -1,0 +1,81 @@
+// Run `npm run db:migrate` after changing this file (regenerates the client too).
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  // Nest compiles to CommonJS.
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// A PhoneMail account: <phone>@<MAIL_DOMAIN>.
+model User {
+  id        String    @id @default(uuid())
+  phone     String?   @unique
+  email     String    @unique
+  name      String?
+  createdAt DateTime  @default(now())
+  messages  Message[]
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum RecipientType {
+  TO
+  CC
+  BCC
+}
+
+/// An email sent from PhoneMail through the SMTP relay.
+model Message {
+  id            String        @id @default(uuid())
+  senderId      String
+  sender        User          @relation(fields: [senderId], references: [id])
+  /// From header as sent, e.g. `"Mani" <9876543210@phonemail.com>`
+  fromHeader    String
+  subject       String
+  text          String?
+  html          String?
+  inReplyTo     String?
+  status        MessageStatus @default(PENDING)
+  /// Message-ID assigned when the relay accepted it
+  smtpMessageId String?
+  smtpResponse  String?
+  error         String?
+  createdAt     DateTime      @default(now())
+  sentAt        DateTime?
+  recipients    Recipient[]
+  attachments   Attachment[]
+
+  @@index([senderId, createdAt])
+}
+
+model Recipient {
+  id        String        @id @default(uuid())
+  messageId String
+  message   Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  email     String
+  type      RecipientType
+
+  @@index([messageId])
+  @@index([email])
+}
+
+/// Metadata only; file bytes are not stored in the database.
+model Attachment {
+  id          String  @id @default(uuid())
+  messageId   String
+  message     Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  filename    String
+  contentType String
+  size        Int
+
+  @@index([messageId])
+}

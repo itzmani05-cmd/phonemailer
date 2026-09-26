@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-phonemail}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-phonemail}
+      POSTGRES_DB: ${POSTGRES_DB:-phonemail}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-phonemail}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-phonemail}:${POSTGRES_PASSWORD:-phonemail}@postgres:5432/${POSTGRES_DB:-phonemail}
+      INBOUND_SECRET: ${INBOUND_SECRET:-change-me}
+      # Outbound relay for POST /email/send
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      EMAIL_API_KEY: ${EMAIL_API_KEY:?set EMAIL_API_KEY in .env}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  mail-server:
+    build: ./mail-server
+    environment:
+      SMTP_PORT: 2525
+      BACKEND_URL: http://backend:3000
+      INBOUND_SECRET: ${INBOUND_SECRET:-change-me}
+    ports:
+      # Map host 25 -> 2525 in production so real MTAs can deliver.
+      - "${SMTP_HOST_PORT:-2525}:2525"
+    depends_on:
+      - backend
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
