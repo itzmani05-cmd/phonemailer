@@ -16,17 +16,17 @@ import { Text, TextInput } from '@/components/Text'
 import { api } from '@/data/api'
 import { useAuth } from '@/data/auth'
 import { completeOnboarding } from '@/data/onboarding'
+import { useT } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 import { font, radius, spacing } from '@/theme/metrics'
 
 const CODE_LENGTH = 6
 
-function errorMessage(err: unknown): string {
-  return err instanceof ApiError ? err.message : 'Can’t reach PhoneMail. Check your connection.'
-}
 
 export default function VerifyScreen() {
   const { colors } = useTheme()
+  const t = useT()
+  const errorMessage = (err: unknown) => (err instanceof ApiError ? err.message : t('common.offline'))
   const { signIn } = useAuth()
   const params = useLocalSearchParams<{ phone: string; resendIn?: string }>()
   const phone = params.phone ?? ''
@@ -75,7 +75,7 @@ export default function VerifyScreen() {
     try {
       const res = await api.requestOtp(phone)
       setWait(res.resendIn)
-      setNotice('We sent you a new code.')
+      setNotice(t('verify.newCode'))
     } catch (err) {
       if (err instanceof ApiError && err.retryAfter) setWait(err.retryAfter)
       setError(errorMessage(err))
@@ -87,17 +87,17 @@ export default function VerifyScreen() {
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.welcome }]}>
       <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.topBar}>
-          <HeaderButton icon="arrowLeft" label="Change number" onPress={() => router.back()} color={colors.text} />
+          <HeaderButton icon="arrowLeft" label={t('verify.changeNumber')} onPress={() => router.back()} color={colors.text} />
         </View>
 
         <View style={styles.content}>
-          <Text style={[styles.title, { color: colors.text }]}>Enter the code</Text>
+          <Text style={[styles.title, { color: colors.text }]}>{t('verify.title')}</Text>
           <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-            We texted a {CODE_LENGTH}-digit code to{' '}
+            {t('verify.sent', { n: CODE_LENGTH })}{' '}
             <Text style={{ color: colors.text, fontWeight: '600' }}>{formatPhone(phone, '91')}</Text>
           </Text>
           <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={8}>
-            <Text style={[styles.link, { color: colors.primary }]}>Wrong number?</Text>
+            <Text style={[styles.link, { color: colors.primary }]}>{t('verify.wrongNumber')}</Text>
           </Pressable>
 
           <Pressable style={styles.boxes} onPress={() => input.current?.focus()} accessible={false}>
@@ -134,7 +134,7 @@ export default function VerifyScreen() {
               importantForAutofill="yes"
               maxLength={CODE_LENGTH}
               caretHidden
-              accessibilityLabel="Verification code"
+              accessibilityLabel={t('verify.title')}
               style={styles.hiddenInput}
             />
           </Pressable>
@@ -143,7 +143,7 @@ export default function VerifyScreen() {
             {busy ? (
               <View style={styles.row}>
                 <ActivityIndicator color={colors.primary} />
-                <Text style={[styles.statusText, { color: colors.textMuted }]}>Verifying…</Text>
+                <Text style={[styles.statusText, { color: colors.textMuted }]}>{t('verify.verifying')}</Text>
               </View>
             ) : error ? (
               <Text style={[styles.statusText, { color: colors.danger }]}>{error}</Text>
@@ -159,7 +159,9 @@ export default function VerifyScreen() {
                 { color: wait > 0 ? colors.textSubtle : colors.primary },
               ]}
             >
-              {wait > 0 ? `Resend code in 0:${String(wait).padStart(2, '0')}` : 'Resend code'}
+              {wait > 0
+                ? t('verify.resendIn', { time: `0:${String(wait).padStart(2, '0')}` })
+                : t('verify.resend')}
             </Text>
           </Pressable>
         </View>

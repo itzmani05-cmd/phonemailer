@@ -1,30 +1,61 @@
-import { Controller, Get, Req } from '@nestjs/common';
-import type { Request } from 'express';
-import { bearerToken } from '../auth/auth.guards';
-import { AuthService, toAccount } from '../auth/auth.service';
-
-const GB = 1024 ** 3;
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import type { Response } from 'express';
+import { CurrentUser, MailboxGuard } from '../auth/auth.guards';
+import type { AuthUser } from '../auth/auth.service';
+import { AccountService } from './account.service';
+import { AliasDto, AvatarDto, UpdateAccountDto } from './dto/account.dto';
 
 @Controller('account')
+@UseGuards(MailboxGuard)
 export class AccountController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(private readonly account: AccountService) {}
 
   @Get()
-  async get(@Req() req: Request) {
-    const token = bearerToken(req);
-    const user = token ? await this.auth.userFromToken(token) : null;
-    if (user) return toAccount(user);
+  get(@CurrentUser() user: AuthUser) {
+    return this.account.view(user.id);
+  }
 
-    const phone = (process.env.ACCOUNT_PHONE ?? '').replace(/\D/g, '');
-    const domain = process.env.MAIL_DOMAIN ?? 'phonemail.local';
-    return {
-      name: process.env.ACCOUNT_NAME || phone || 'Me',
-      phone,
-      countryCode: (process.env.ACCOUNT_COUNTRY_CODE ?? '').replace(/\D/g, ''),
-      address:
-        process.env.ACCOUNT_ADDRESS ??
-        (phone ? `${phone}@${domain}` : `me@${domain}`),
-      storageQuotaBytes: Number(process.env.STORAGE_QUOTA_GB ?? 15) * GB,
-    };
+  @Patch()
+  update(@CurrentUser() user: AuthUser, @Body() dto: UpdateAccountDto) {
+    return this.account.rename(user.id, dto.name);
+  }
+
+  @Get('avatar')
+  async avatar(@CurrentUser() user: AuthUser, @Res() res: Response) {
+    const { contentType, content } = await this.account.avatar(user.id);
+    res.type(contentType);
+    res.setHeader('cache-control', 'private, max-age=31536000, immutable');
+    res.send(content);
+  }
+
+  @Put('avatar')
+  setAvatar(@CurrentUser() user: AuthUser, @Body() dto: AvatarDto) {
+    return this.account.setAvatar(user.id, dto.contentType, dto.content);
+  }
+
+  @Delete('avatar')
+  removeAvatar(@CurrentUser() user: AuthUser) {
+    return this.account.removeAvatar(user.id);
+  }
+
+  @Post('aliases')
+  addAlias(@CurrentUser() user: AuthUser, @Body() dto: AliasDto) {
+    return this.account.addAlias(user.id, dto.name);
+  }
+
+  @Delete('aliases/:name')
+  removeAlias(@CurrentUser() user: AuthUser, @Param('name') name: string) {
+    return this.account.removeAlias(user.id, name);
   }
 }

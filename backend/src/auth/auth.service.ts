@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { AccountService } from '../account/account.service';
 import type { User } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RequestOtpDto, VerifyOtpDto } from './dto/otp.dto';
@@ -9,8 +10,6 @@ import {
   RESEND_COOLDOWN_SECONDS,
 } from './otp.service';
 import { mailboxAddress, parsePhone, type Phone } from './phone';
-
-const GB = 1024 ** 3;
 
 const tokenTtlSeconds = () =>
   Number(process.env.JWT_EXPIRES_IN_DAYS ?? 30) * 24 * 60 * 60;
@@ -26,23 +25,13 @@ function toAuthUser(u: User): AuthUser {
   return { id: u.id, phone: u.phone, email: u.email, name: u.name };
 }
 
-export function toAccount(user: AuthUser) {
-  const phone = user.phone ? parsePhone(user.phone) : null;
-  return {
-    name: user.name ?? phone?.national ?? user.email.split('@')[0],
-    phone: phone?.national ?? '',
-    countryCode: phone?.countryCode ?? '',
-    address: user.email,
-    storageQuotaBytes: Number(process.env.STORAGE_QUOTA_GB ?? 15) * GB,
-  };
-}
-
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly otp: OtpService,
     private readonly jwt: JwtService,
+    private readonly account: AccountService,
   ) {}
 
   private parse(dto: RequestOtpDto): Phone {
@@ -84,7 +73,7 @@ export class AuthService {
       expiresIn,
       isNewUser,
       user: authUser,
-      account: toAccount(authUser),
+      account: await this.account.view(user.id),
     };
   }
 

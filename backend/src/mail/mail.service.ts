@@ -155,13 +155,20 @@ export class MailService {
     private readonly newMailSms: NewMailSmsService,
   ) {}
 
-  findLocalUser(address: string) {
+  async findLocalUser(address: string) {
     const email = address.trim().toLowerCase();
-    if (!isLocalAddress(email)) return Promise.resolve(null);
-    const phone = parsePhone(email.split('@')[0]);
-    return this.prisma.user.findFirst({
+    if (!isLocalAddress(email)) return null;
+    const local = email.split('@')[0];
+    const phone = parsePhone(local);
+    const user = await this.prisma.user.findFirst({
       where: { OR: [{ email }, ...(phone ? [{ phone: phone.e164 }] : [])] },
     });
+    if (user || phone) return user;
+    const alias = await this.prisma.alias.findUnique({
+      where: { name: local },
+      include: { owner: true },
+    });
+    return alias?.owner ?? null;
   }
 
   receive(inbound: InboundMail): Promise<DeliveryResult> {

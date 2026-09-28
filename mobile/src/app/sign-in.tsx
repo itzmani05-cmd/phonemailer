@@ -1,6 +1,6 @@
 import { ApiError } from '@shared/mail'
 import { router } from 'expo-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,6 +15,9 @@ import { BrandLogo } from '@/components/BrandLogo'
 import { Text, TextInput } from '@/components/Text'
 import { api } from '@/data/api'
 import { MAIL_DOMAIN } from '@/data/config'
+import { useT } from '@/i18n/LanguageProvider'
+import { Icon } from '@/components/Icon'
+import { phoneHintAvailable, requestPhoneNumber } from '../../modules/phone-hint'
 import { useTheme } from '@/theme/ThemeProvider'
 import { font, radius, spacing } from '@/theme/metrics'
 
@@ -34,17 +37,42 @@ const grouped = (digits: string) =>
 
 export default function SignInScreen() {
   const { colors } = useTheme()
+  const t = useT()
   const [digits, setDigits] = useState('')
+  const [fromSim, setFromSim] = useState(false)
   const [touched, setTouched] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const fillFromSim = async () => {
+    const number = await requestPhoneNumber()
+    if (!number) return
+    setDigits(nationalDigits(number))
+    setFromSim(true)
+    setTouched(true)
+    setError(null)
+  }
+
+  useEffect(() => {
+    if (!phoneHintAvailable) return
+    let active = true
+    void requestPhoneNumber().then((number) => {
+      if (!active || !number) return
+      setDigits(nationalDigits(number))
+      setFromSim(true)
+      setTouched(true)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
 
   const valid = isValidMobile(digits)
   const inputError =
     touched && !valid
       ? digits.length === 10
-        ? 'Indian mobile numbers start with 6, 7, 8 or 9'
-        : 'Enter your 10-digit mobile number'
+        ? t('signIn.errStart')
+        : t('signIn.errLength')
       : null
 
   const next = async () => {
@@ -59,7 +87,7 @@ export default function SignInScreen() {
       if (err instanceof ApiError && err.status === 429 && err.retryAfter) {
         router.push({ pathname: '/verify', params: { phone: digits, resendIn: String(err.retryAfter) } })
       } else {
-        setError(err instanceof ApiError ? err.message : 'Can’t reach PhoneMail. Check your connection.')
+        setError(err instanceof ApiError ? err.message : t('common.offline'))
       }
     } finally {
       setBusy(false)
@@ -72,13 +100,11 @@ export default function SignInScreen() {
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <BrandLogo size={72} />
-            <Text style={[styles.title, { color: colors.text }]}>Welcome to PhoneMail</Text>
-            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-              Your phone number is your email address.
-            </Text>
+            <Text style={[styles.title, { color: colors.text }]}>{t('signIn.title')}</Text>
+            <Text style={[styles.subtitle, { color: colors.textMuted }]}>{t('signIn.subtitle')}</Text>
           </View>
 
-          <Text style={[styles.label, { color: colors.textMuted }]}>Mobile number</Text>
+          <Text style={[styles.label, { color: colors.textMuted }]}>{t('signIn.label')}</Text>
           <View
             style={[
               styles.field,
@@ -94,8 +120,9 @@ export default function SignInScreen() {
             </View>
             <TextInput
               value={grouped(digits)}
-              onChangeText={(t) => {
-                setDigits(nationalDigits(t))
+              onChangeText={(value) => {
+                setDigits(nationalDigits(value))
+                setFromSim(false)
                 setError(null)
               }}
               onBlur={() => digits.length > 0 && setTouched(true)}
@@ -106,8 +133,8 @@ export default function SignInScreen() {
               autoComplete="tel"
               textContentType="telephoneNumber"
               returnKeyType="go"
-              autoFocus
-              accessibilityLabel="Mobile number"
+              autoFocus={!phoneHintAvailable}
+              accessibilityLabel={t('signIn.label')}
               style={[styles.input, { color: colors.text }]}
             />
           </View>
@@ -116,15 +143,25 @@ export default function SignInScreen() {
             <Text style={[styles.hint, { color: colors.danger }]}>{inputError}</Text>
           ) : valid ? (
             <Text style={[styles.hint, { color: colors.textMuted }]}>
-              Your email address will be{' '}
+              {fromSim ? `${t('signIn.simFilled')} ` : ''}
+              {t('signIn.addressWillBe')}{' '}
               <Text style={{ color: colors.text, fontWeight: '600' }}>
                 {digits}@{MAIL_DOMAIN}
               </Text>
             </Text>
           ) : (
-            <Text style={[styles.hint, { color: colors.textMuted }]}>
-              We’ll text you a 6-digit code to verify it.
-            </Text>
+            <Text style={[styles.hint, { color: colors.textMuted }]}>{t('signIn.codeHint')}</Text>
+          )}
+
+          {phoneHintAvailable && (
+            <Pressable
+              onPress={() => void fillFromSim()}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.simButton, pressed && { opacity: 0.7 }]}
+            >
+              <Icon name="phone" size={17} color={colors.primary} />
+              <Text style={[styles.simText, { color: colors.primary }]}>{t('signIn.useSim')}</Text>
+            </Pressable>
           )}
 
           {error && (
@@ -151,21 +188,10 @@ export default function SignInScreen() {
             {busy ? (
               <ActivityIndicator color={colors.onPrimary} />
             ) : (
-              <Text style={[styles.primaryText, { color: colors.onPrimary }]}>Continue</Text>
+              <Text style={[styles.primaryText, { color: colors.onPrimary }]}>{t('common.continue')}</Text>
             )}
           </Pressable>
 
-          <Text style={[styles.terms, { color: colors.textMuted }]}>
-            By continuing, you agree to our{' '}
-            <Text
-              onPress={() => router.push('/terms')}
-              accessibilityRole="link"
-              style={{ color: colors.primary, fontWeight: '600' }}
-            >
-              Terms & Conditions
-            </Text>
-            .
-          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -204,5 +230,14 @@ const styles = StyleSheet.create({
   spacer: { flex: 1, minHeight: spacing.xl },
   primary: { height: 54, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   primaryText: { fontSize: font.title, fontWeight: '600' },
-  terms: { fontSize: font.small, textAlign: 'center', marginTop: spacing.lg, lineHeight: 19 },
+  simButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    alignSelf: 'flex-start',
+    marginTop: spacing.md,
+    marginLeft: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
+  simText: { fontSize: font.body, fontWeight: '600' },
 })

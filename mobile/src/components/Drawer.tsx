@@ -1,5 +1,4 @@
 import { formatPhone, viewCounts, type MailView } from '@shared/mail'
-import { labelColors, type LabelColor } from '@shared/theme'
 import { router, type Href } from 'expo-router'
 import {
   createContext,
@@ -25,9 +24,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '@/data/auth'
 import { useMail } from '@/data/MailProvider'
+import { useT } from '@/i18n/LanguageProvider'
+import type { StringKey } from '@/i18n/strings'
 import { useTheme } from '@/theme/ThemeProvider'
 import { font, radius, spacing } from '@/theme/metrics'
-import { Avatar } from './Avatar'
+import { AccountAvatar } from './Avatar'
 import { Icon, type IconName } from './Icon'
 import { Text } from './Text'
 
@@ -106,22 +107,21 @@ function DrawerItem({ icon, label, active, badge, badgeTone = 'muted', trailing,
   )
 }
 
-const FOLDERS: { view: MailView; label: string; icon: IconName }[] = [
-  { view: 'starred', label: 'Starred', icon: 'star' },
-  { view: 'sent', label: 'Sent', icon: 'send' },
-  { view: 'drafts', label: 'Drafts', icon: 'file' },
-  { view: 'spam', label: 'Spam', icon: 'shield' },
-  { view: 'trash', label: 'Trash', icon: 'trash' },
+const FOLDERS: { view: MailView; label: StringKey; icon: IconName }[] = [
+  { view: 'drafts', label: 'menu.drafts', icon: 'file' },
+  { view: 'spam', label: 'menu.spam', icon: 'shield' },
+  { view: 'trash', label: 'menu.trash', icon: 'trash' },
 ]
 
-export function MenuList({ onNavigate, showInbox = true }: { onNavigate?: () => void; showInbox?: boolean }) {
+export function MenuList({ onNavigate, showHome = true }: { onNavigate?: () => void; showHome?: boolean }) {
   const { colors } = useTheme()
-  const { mails, labels } = useMail()
+  const { mails } = useMail()
   const { signOut } = useAuth()
+  const t = useT()
 
   const confirmSignOut = () => {
-    const title = 'Sign out?'
-    const message = 'You can sign back in with a code sent to your number.'
+    const title = t('menu.signOutTitle')
+    const message = t('menu.signOutBody')
     const leave = () => {
       onNavigate?.()
       void signOut()
@@ -131,11 +131,10 @@ export function MenuList({ onNavigate, showInbox = true }: { onNavigate?: () => 
       return
     }
     Alert.alert(title, message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign out', style: 'destructive', onPress: leave },
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('menu.signOut'), style: 'destructive', onPress: leave },
     ])
   }
-  const [labelsOpen, setLabelsOpen] = useState(false)
   const counts = useMemo(() => viewCounts(mails), [mails])
 
   const go = (href: Href) => {
@@ -145,10 +144,10 @@ export function MenuList({ onNavigate, showInbox = true }: { onNavigate?: () => 
 
   return (
     <>
-      {showInbox && (
+      {showHome && (
         <DrawerItem
-          icon="inbox"
-          label="Inbox"
+          icon="chatLines"
+          label={t('menu.home')}
           active
           badge={counts.inbox}
           badgeTone="primary"
@@ -159,7 +158,7 @@ export function MenuList({ onNavigate, showInbox = true }: { onNavigate?: () => 
         <DrawerItem
           key={f.view}
           icon={f.icon}
-          label={f.label}
+          label={t(f.label)}
           badge={f.view === 'drafts' ? counts.drafts : f.view === 'spam' ? counts.spam : 0}
           onPress={() => go({ pathname: '/folder/[view]', params: { view: f.view } })}
         />
@@ -167,40 +166,9 @@ export function MenuList({ onNavigate, showInbox = true }: { onNavigate?: () => 
 
       <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-      <DrawerItem icon="users" label="Contacts" onPress={() => go('/contacts')} />
-      <DrawerItem
-        icon="label"
-        label="Labels"
-        onPress={() => setLabelsOpen((o) => !o)}
-        trailing={
-          <Icon name={labelsOpen ? 'chevronDown' : 'chevronRight'} size={20} color={colors.textSubtle} />
-        }
-      />
-      {labelsOpen &&
-        labels.map((l) => (
-          <DrawerItem
-            key={l.name}
-            icon="label"
-            label={l.name}
-            leading={
-              <View
-                style={[
-                  styles.swatch,
-                  { backgroundColor: labelColors[l.color as LabelColor] ?? l.color },
-                ]}
-              />
-            }
-            onPress={() =>
-              go({ pathname: '/folder/[view]', params: { view: `label:${l.name}` } })
-            }
-          />
-        ))}
-
-      <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-      <DrawerItem icon="settings" label="Settings" onPress={() => go('/settings')} />
-      <DrawerItem icon="help" label="Help & Support" onPress={() => go('/help')} />
-      <DrawerItem icon="logout" label="Sign out" onPress={confirmSignOut} />
+      <DrawerItem icon="settings" label={t('menu.settings')} onPress={() => go('/settings')} />
+      <DrawerItem icon="help" label={t('menu.help')} onPress={() => go('/help')} />
+      <DrawerItem icon="logout" label={t('menu.signOut')} onPress={confirmSignOut} />
     </>
   )
 }
@@ -255,7 +223,7 @@ function DrawerPanel({ visible, onClose }: { visible: boolean; onClose: () => vo
       >
         <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl }}>
           <View style={styles.profile}>
-            <Avatar name={account?.name ?? '?'} size={64} tone="primary" />
+            <AccountAvatar size={64} />
             <View style={styles.profileText}>
               <Text style={[styles.profileName, { color: colors.text }]} numberOfLines={1}>
                 {account?.name ?? ''}
@@ -312,6 +280,5 @@ const styles = StyleSheet.create({
   itemLabelActive: { fontWeight: '500' },
   badge: { minWidth: 30, height: 26, paddingHorizontal: 8, borderRadius: 13, justifyContent: 'center' },
   badgeText: { fontSize: font.small, fontWeight: '600', textAlign: 'center' },
-  swatch: { width: 16, height: 16, borderRadius: 4 },
   divider: { height: StyleSheet.hairlineWidth, marginVertical: spacing.md, marginHorizontal: spacing.sm },
 })

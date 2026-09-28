@@ -29,6 +29,8 @@ import { Icon } from '@/components/Icon'
 import { Text, TextInput } from '@/components/Text'
 import { openAttachment, type PickedFile } from '@/data/attachments'
 import { useMail } from '@/data/MailProvider'
+import { isFavorite } from '@/data/favorites'
+import { useT } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 import { font, radius, spacing } from '@/theme/metrics'
 
@@ -110,6 +112,19 @@ export default function ConversationScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unreadKey, updateMany])
 
+  const t = useT()
+  const favorite = !!conversation && isFavorite(conversation)
+  const toggleFavorite = () => {
+    if (!conversation) return
+    if (favorite) {
+      void updateMany(
+        conversation.messages.filter((m) => m.starred).map((m) => m.id),
+        { starred: false },
+      )
+    } else {
+      void updateMany([conversation.latest.id], { starred: true })
+    }
+  }
   const person = conversation?.person ?? { name: address ?? '', address: address ?? '' }
   const phone = person.address.split('@')[0]
   const isPhone = /^\+?\d{7,15}$/.test(phone)
@@ -269,12 +284,21 @@ export default function ConversationScreen() {
         onClose={() => setMenu(false)}
         options={[
           {
-            label: 'New email',
+            label: t('chat.newEmail'),
             icon: 'pencil',
             onPress: () => router.push({ pathname: '/compose', params: { to: person.address } }),
           },
+          ...(conversation
+            ? [
+                {
+                  label: favorite ? t('chat.removeFavorite') : t('chat.addFavorite'),
+                  icon: 'star' as const,
+                  onPress: toggleFavorite,
+                },
+              ]
+            : []),
           {
-            label: 'Mark all as read',
+            label: t('chat.markRead'),
             icon: 'mail',
             onPress: () =>
               void updateMany(
@@ -283,7 +307,7 @@ export default function ConversationScreen() {
               ),
           },
           {
-            label: 'Move conversation to Trash',
+            label: t('chat.trash'),
             icon: 'trash',
             danger: true,
             onPress: () => {

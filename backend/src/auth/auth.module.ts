@@ -2,6 +2,7 @@ import { Logger, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { randomBytes } from 'node:crypto';
+import { AccountService } from '../account/account.service';
 import { emailConfig } from '../email/email.config';
 import { AuthController } from './auth.controller';
 import { ApiAuthGuard, JwtAuthGuard, MailboxGuard } from './auth.guards';
@@ -31,6 +32,7 @@ import { TwilioVerifyService } from './verify.service';
   ],
   controllers: [AuthController],
   providers: [
+    AccountService,
     AuthService,
     OtpService,
     SmsService,
@@ -40,6 +42,7 @@ import { TwilioVerifyService } from './verify.service';
     MailboxGuard,
   ],
   exports: [
+    AccountService,
     AuthService,
     JwtAuthGuard,
     ApiAuthGuard,

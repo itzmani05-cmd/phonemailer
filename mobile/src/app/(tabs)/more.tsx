@@ -2,22 +2,24 @@ import { formatPhone } from '@shared/mail'
 import { router } from 'expo-router'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Avatar } from '@/components/Avatar'
+import { AccountAvatar } from '@/components/Avatar'
 import { MenuList } from '@/components/Drawer'
 import { Icon } from '@/components/Icon'
 import { Text } from '@/components/Text'
 import { useMail } from '@/data/MailProvider'
+import { useT } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 import { font, radius, spacing } from '@/theme/metrics'
 
 export default function MoreScreen() {
   const { colors } = useTheme()
   const { account } = useMail()
+  const t = useT()
 
   return (
     <SafeAreaView edges={['top']} style={[styles.screen, { backgroundColor: colors.surface }]}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.title, { color: colors.text }]}>More</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{t('tabs.more')}</Text>
 
         {account && (
           <Pressable
@@ -30,7 +32,7 @@ export default function MoreScreen() {
               pressed && { opacity: 0.85 },
             ]}
           >
-            <Avatar name={account.name} size={56} tone="primary" />
+            <AccountAvatar size={56} />
             <View style={styles.profileText}>
               <Text style={[styles.name, { color: colors.text }]}>{account.name}</Text>
               {!!account.phone && (
@@ -46,7 +48,7 @@ export default function MoreScreen() {
           </Pressable>
         )}
 
-        <MenuList showInbox={false} />
+        <MenuList showHome={false} />
       </ScrollView>
     </SafeAreaView>
   )

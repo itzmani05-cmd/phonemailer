@@ -11,7 +11,6 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" />
       <Tabs.Screen name="contacts" />
-      <Tabs.Screen name="compose-tab" />
       <Tabs.Screen name="attachments" />
       <Tabs.Screen name="more" />
     </Tabs>

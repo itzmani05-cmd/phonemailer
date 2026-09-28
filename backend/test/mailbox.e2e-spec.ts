@@ -94,7 +94,7 @@ describe('Per-user mailboxes (e2e)', () => {
     sms.sent = [];
     sms.fail = false;
     await prisma.$executeRawUnsafe(
-      'TRUNCATE "Label", "OtpCode", "Recipient", "Attachment", "Message", "User" CASCADE',
+      'TRUNCATE "Alias", "Label", "OtpCode", "Recipient", "Attachment", "Message", "User" CASCADE',
     );
   });
 

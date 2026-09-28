@@ -51,6 +51,8 @@ export interface Account {
   phone: string
   countryCode: string
   address: string
+  aliases: string[]
+  avatarVersion: string | null
   storageQuotaBytes: number
 }
 

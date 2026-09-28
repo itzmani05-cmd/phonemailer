@@ -34,6 +34,7 @@ interface MailContextValue {
   updateMany: (ids: string[], changes: MailChanges) => Promise<void>
   removeMany: (ids: string[]) => Promise<void>
   send: (email: SendEmailRequest) => Promise<void>
+  setAccount: (account: Account) => void
 }
 
 const MailContext = createContext<MailContextValue | null>(null)
@@ -160,6 +161,8 @@ export function MailProvider({ children }: { children: ReactNode }) {
     [load],
   )
 
+  const setAccount = useCallback((a: Account) => setProfile({ owner: token, account: a }), [token])
+
   const value = useMemo(
     () => ({
       mails,
@@ -173,8 +176,9 @@ export function MailProvider({ children }: { children: ReactNode }) {
       updateMany,
       removeMany,
       send,
+      setAccount,
     }),
-    [mails, labels, account, loading, refreshing, error, refresh, update, updateMany, removeMany, send],
+    [mails, labels, account, loading, refreshing, error, refresh, update, updateMany, removeMany, send, setAccount],
   )
 
   return <MailContext.Provider value={value}>{children}</MailContext.Provider>

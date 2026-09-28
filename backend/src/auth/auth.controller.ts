@@ -8,12 +8,16 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser, JwtAuthGuard } from './auth.guards';
-import { AuthService, toAccount, type AuthUser } from './auth.service';
+import { AccountService } from '../account/account.service';
+import { AuthService, type AuthUser } from './auth.service';
 import { RequestOtpDto, VerifyOtpDto } from './dto/otp.dto';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly account: AccountService,
+  ) {}
 
   @Post('otp/request')
   @HttpCode(200)
@@ -37,6 +41,6 @@ export class AuthController {
     @Headers('x-phonemail-client') client?: string,
   ) {
     if (client === 'mobile') await this.auth.markMobileApp(user.id);
-    return { user, account: toAccount(user) };
+    return { user, account: await this.account.view(user.id) };
   }
 }

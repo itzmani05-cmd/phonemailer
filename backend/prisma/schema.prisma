@@ -9,15 +9,19 @@ datasource db {
 }
 
 model User {
-  id          String    @id @default(uuid())
-  phone       String?   @unique
-  email       String    @unique
-  name        String?
-  createdAt   DateTime  @default(now())
-  lastLoginAt DateTime?
-  mobileAppAt DateTime?
-  messages    Message[]
-  labels      Label[]
+  id              String    @id @default(uuid())
+  phone           String?   @unique
+  email           String    @unique
+  name            String?
+  createdAt       DateTime  @default(now())
+  lastLoginAt     DateTime?
+  mobileAppAt     DateTime?
+  avatar          Bytes?
+  avatarType      String?
+  avatarUpdatedAt DateTime?
+  messages        Message[]
+  labels          Label[]
+  aliases         Alias[]
 }
 
 model OtpCode {
@@ -65,32 +69,32 @@ enum MailCategory {
 }
 
 model Message {
-  id            String         @id @default(uuid())
-  ownerId       String
-  owner         User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  direction     MailDirection
-  folder        MailFolder     @default(inbox)
-  category      MailCategory   @default(primary)
-  labels        String[]       @default([])
-  read          Boolean        @default(false)
-  starred       Boolean        @default(false)
-  snoozedUntil  DateTime?
-  fromHeader    String
-  envelopeFrom  String?
-  subject       String
-  text          String?
-  html          String?
-  messageId     String?
-  inReplyTo     String?
-  date          DateTime       @default(now())
-  size          Int            @default(0)
-  status        MessageStatus?
-  smtpResponse  String?
-  error         String?
-  createdAt     DateTime       @default(now())
-  sentAt        DateTime?
-  recipients    Recipient[]
-  attachments   Attachment[]
+  id           String         @id @default(uuid())
+  ownerId      String
+  owner        User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  direction    MailDirection
+  folder       MailFolder     @default(inbox)
+  category     MailCategory   @default(primary)
+  labels       String[]       @default([])
+  read         Boolean        @default(false)
+  starred      Boolean        @default(false)
+  snoozedUntil DateTime?
+  fromHeader   String
+  envelopeFrom String?
+  subject      String
+  text         String?
+  html         String?
+  messageId    String?
+  inReplyTo    String?
+  date         DateTime       @default(now())
+  size         Int            @default(0)
+  status       MessageStatus?
+  smtpResponse String?
+  error        String?
+  createdAt    DateTime       @default(now())
+  sentAt       DateTime?
+  recipients   Recipient[]
+  attachments  Attachment[]
 
   @@index([ownerId, createdAt])
   @@index([ownerId, messageId])
@@ -128,4 +132,14 @@ model Label {
   color   String
 
   @@unique([ownerId, name])
+}
+
+model Alias {
+  id        String   @id @default(uuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([ownerId])
 }

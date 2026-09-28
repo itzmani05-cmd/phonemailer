@@ -68,6 +68,20 @@ export function createMailApi(baseUrl: string, options: MailApiOptions = {}) {
       request<Label>('/labels', { method: 'POST', body: JSON.stringify(label) }),
 
     account: () => request<Account>('/account'),
+    updateAccount: (changes: { name: string }) =>
+      request<Account>('/account', { method: 'PATCH', body: JSON.stringify(changes) }),
+    setAvatar: (photo: { contentType: string; content: string }) =>
+      request<Account>('/account/avatar', { method: 'PUT', body: JSON.stringify(photo) }),
+    removeAvatar: () => request<Account>('/account/avatar', { method: 'DELETE' }),
+    avatarUrl: (version: string) => {
+      const token = options.getToken?.()
+      const auth = token ? `&access_token=${encodeURIComponent(token)}` : ''
+      return `${baseUrl}/account/avatar?v=${encodeURIComponent(version)}${auth}`
+    },
+    addAlias: (name: string) =>
+      request<Account>('/account/aliases', { method: 'POST', body: JSON.stringify({ name }) }),
+    removeAlias: (address: string) =>
+      request<Account>(`/account/aliases/${encodeURIComponent(address)}`, { method: 'DELETE' }),
 
     send: (email: SendEmailRequest) =>
       request<SendEmailResult>('/email/send', { method: 'POST', body: JSON.stringify(email) }),
