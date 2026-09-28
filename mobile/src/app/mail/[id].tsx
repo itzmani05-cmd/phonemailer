@@ -1,5 +1,4 @@
 import {
-  counterpart,
   formatBytes,
   formatDetailDate,
   senderAddress,
@@ -18,6 +17,8 @@ import { Icon } from '@/components/Icon'
 import { Text } from '@/components/Text'
 import { openAttachment } from '@/data/attachments'
 import { useMail } from '@/data/MailProvider'
+import { traditionalReplyParams, wasRepliedTo } from '@/data/reply'
+import { useT } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 import { font, radius, spacing } from '@/theme/metrics'
 
@@ -25,6 +26,7 @@ export default function EmailDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { colors } = useTheme()
   const { mails, labels, account, update, removeMany } = useMail()
+  const t = useT()
   const [menu, setMenu] = useState<'none' | 'more' | 'labels'>('none')
   const mail = mails.find((m) => m.id === id)
 
@@ -53,20 +55,8 @@ export default function EmailDetailsScreen() {
     router.back()
   }
 
-  const replyTo = () =>
-    router.push({
-      pathname: '/compose',
-      params: {
-        to: mine ? mail.to.join(',') : counterpart(mail).address,
-        subject: /^re:/i.test(mail.subject) ? mail.subject : `Re: ${mail.subject}`,
-        body: `\n\nOn ${formatDetailDate(mail.date)}, ${mail.from} wrote:\n${mail.text
-          .trim()
-          .split('\n')
-          .map((l) => `> ${l}`)
-          .join('\n')}`,
-        inReplyTo: mail.messageId ?? undefined,
-      },
-    })
+  const replied = wasRepliedTo(mail, mails)
+  const replyTo = () => router.push({ pathname: '/compose', params: traditionalReplyParams(mail) })
 
   const forward = () =>
     router.push({
@@ -78,7 +68,7 @@ export default function EmailDetailsScreen() {
     })
 
   const moreOptions: SheetOption[] = [
-    { label: 'Reply', icon: 'reply', onPress: replyTo },
+    ...(replied ? [] : [{ label: t('chat.reply'), icon: 'reply' as const, onPress: replyTo }]),
     { label: 'Forward', icon: 'forward', onPress: forward },
     {
       label: mail.starred ? 'Remove star' : 'Star',
@@ -219,16 +209,23 @@ export default function EmailDetailsScreen() {
         )}
 
         <View style={styles.actions}>
-          <Pressable
-            onPress={replyTo}
-            style={({ pressed }) => [
-              styles.action,
-              { backgroundColor: pressed ? colors.primaryHover : colors.primary },
-            ]}
-          >
-            <Icon name="reply" size={20} color={colors.onPrimary} />
-            <Text style={[styles.actionText, { color: colors.onPrimary }]}>Reply</Text>
-          </Pressable>
+          {replied ? (
+            <View style={[styles.action, styles.actionOutline, { borderColor: colors.border }]}>
+              <Icon name="checkCheck" size={20} color={colors.textMuted} />
+              <Text style={[styles.actionText, { color: colors.textMuted }]}>{t('chat.replied')}</Text>
+            </View>
+          ) : (
+            <Pressable
+              onPress={replyTo}
+              style={({ pressed }) => [
+                styles.action,
+                { backgroundColor: pressed ? colors.primaryHover : colors.primary },
+              ]}
+            >
+              <Icon name="reply" size={20} color={colors.onPrimary} />
+              <Text style={[styles.actionText, { color: colors.onPrimary }]}>{t('chat.reply')}</Text>
+            </Pressable>
+          )}
           <Pressable
             onPress={forward}
             style={({ pressed }) => [

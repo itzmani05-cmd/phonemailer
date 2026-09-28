@@ -1,3 +1,8 @@
 import { createMailApi } from '@shared/mail'
+import { getToken } from '../auth/session'
 
-export const mailApi = createMailApi(import.meta.env.VITE_API_URL ?? '/api', { client: 'web' })
+const baseUrl = import.meta.env.VITE_API_URL ?? '/api'
+
+export const mailApi = createMailApi(baseUrl, { client: 'web', getToken })
+
+export const publicApi = createMailApi(baseUrl, { client: 'web' })

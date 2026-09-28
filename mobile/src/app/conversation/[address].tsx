@@ -1,14 +1,6 @@
-import {
-  conversations,
-  formatBytes,
-  formatDay,
-  formatTime,
-  previewText,
-  stripQuoted,
-  type Mail,
-} from '@shared/mail'
+import { conversations, formatDay, previewText, stripQuoted, type Mail } from '@shared/mail'
 import { router, useLocalSearchParams } from 'expo-router'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -19,75 +11,23 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  type TextInput as RNTextInput,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AttachmentPicker } from '@/components/AttachmentPicker'
 import { Avatar } from '@/components/Avatar'
+import { ChatBubble } from '@/components/ChatBubble'
 import { BottomSheet } from '@/components/BottomSheet'
 import { FileBadge } from '@/components/FileBadge'
 import { Icon } from '@/components/Icon'
 import { Text, TextInput } from '@/components/Text'
-import { openAttachment, type PickedFile } from '@/data/attachments'
+import type { PickedFile } from '@/data/attachments'
 import { useMail } from '@/data/MailProvider'
 import { isFavorite } from '@/data/favorites'
+import { isReply, replySubject, traditionalReplyParams } from '@/data/reply'
 import { useT } from '@/i18n/LanguageProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 import { font, radius, spacing } from '@/theme/metrics'
-
-function Bubble({ mail }: { mail: Mail }) {
-  const { colors } = useTheme()
-  const mine = mail.direction === 'out'
-  const body = stripQuoted(mail.text) || previewText(mail, 280)
-  const fg = mine ? colors.onBubbleOut : colors.text
-  const meta = mine ? colors.onBubbleOut : colors.textMuted
-  const onlyAttachment = !body && mail.attachments.length > 0
-
-  return (
-    <Pressable
-      onPress={() => router.push({ pathname: '/mail/[id]', params: { id: mail.id } })}
-      style={[
-        styles.bubble,
-        mine ? styles.bubbleMine : styles.bubbleTheirs,
-        { backgroundColor: mine ? colors.bubbleOut : colors.bubbleIn },
-      ]}
-      accessibilityRole="button"
-      accessibilityHint="Opens the full email"
-    >
-      {!!mail.subject && !mine && mail.html && !stripQuoted(mail.text) && (
-        <Text style={[styles.bubbleSubject, { color: fg }]}>{mail.subject}</Text>
-      )}
-      {!!body && <Text style={[styles.bubbleText, { color: fg }]}>{body}</Text>}
-
-      {mail.attachments.map((a, i) => (
-        <Pressable
-          key={i}
-          onPress={() => openAttachment(mail.id, i)}
-          style={[
-            styles.file,
-            { backgroundColor: mine ? colors.surfaceSelected : colors.surface },
-            !onlyAttachment && styles.fileSpaced,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel={`Download ${a.filename ?? 'attachment'}`}
-        >
-          <FileBadge filename={a.filename} contentType={a.contentType} size={40} />
-          <View style={styles.fileInfo}>
-            <Text style={[styles.fileName, { color: colors.text }]} numberOfLines={1}>
-              {a.filename ?? 'Untitled'}
-            </Text>
-            <Text style={[styles.fileSize, { color: colors.textMuted }]}>{formatBytes(a.size)}</Text>
-          </View>
-          {!mine && <Icon name="download" size={22} color={colors.primary} />}
-        </Pressable>
-      ))}
-
-      <View style={styles.meta}>
-        <Text style={[styles.time, { color: meta }]}>{formatTime(mail.receivedAt)}</Text>
-        {mine && <Icon name="checkCheck" size={15} color={meta} />}
-      </View>
-    </Pressable>
-  )
-}
 
 export default function ConversationScreen() {
   const { address } = useLocalSearchParams<{ address: string }>()
@@ -99,6 +39,9 @@ export default function ConversationScreen() {
   const [picking, setPicking] = useState(false)
   const [menu, setMenu] = useState(false)
   const [sending, setSending] = useState(false)
+  const [subject, setSubject] = useState('')
+  const [replyTarget, setReplyTarget] = useState<Mail | null>(null)
+  const input = useRef<RNTextInput>(null)
 
   const conversation = useMemo(
     () => conversations(mails).find((c) => c.person.address === address),
@@ -129,26 +72,58 @@ export default function ConversationScreen() {
   const phone = person.address.split('@')[0]
   const isPhone = /^\+?\d{7,15}$/.test(phone)
 
-  const lastIncoming = [...(conversation?.messages ?? [])].reverse().find((m) => m.direction === 'in')
-  const lastSubject = conversation?.latest.subject ?? ''
+  const repliedIds = useMemo(
+    () => new Set(mails.filter((m) => m.direction === 'out' && m.inReplyTo).map((m) => m.inReplyTo!)),
+    [mails],
+  )
+  const byMessageId = useMemo(
+    () => new Map((conversation?.messages ?? []).filter((m) => m.messageId).map((m) => [m.messageId!, m])),
+    [conversation],
+  )
+  const isReplied = (m: Mail) => !!m.messageId && repliedIds.has(m.messageId)
+  const alreadyReplied = t('chat.alreadyReplied')
+  const authorOf = (m: Mail) => (m.direction === 'out' ? t('chat.you') : person.name)
 
-  const reply = async () => {
+  const startReply = useCallback(
+    (m: Mail) => {
+      if (m.messageId && repliedIds.has(m.messageId)) return Alert.alert(alreadyReplied)
+      setReplyTarget(m)
+      input.current?.focus()
+    },
+    [repliedIds, alreadyReplied],
+  )
+
+  const composeTraditional = () =>
+    router.push({ pathname: '/compose', params: { to: person.address, locked: '1' } })
+
+  const replyTraditional = (m: Mail) => {
+    setReplyTarget(null)
+    router.push({ pathname: '/compose', params: traditionalReplyParams(m) })
+  }
+
+  const submit = async () => {
     if (!draft.trim() && !files.length) return
+    if (replyTarget && isReplied(replyTarget)) {
+      setReplyTarget(null)
+      return Alert.alert(t('chat.alreadyReplied'))
+    }
     setSending(true)
     try {
       await send({
         to: [person.address],
-        subject: lastSubject ? (/^re:/i.test(lastSubject) ? lastSubject : `Re: ${lastSubject}`) : 'Hello',
+        subject: replyTarget ? replySubject(replyTarget.subject) : subject.trim() || '(no subject)',
         text: draft.trim() || ' ',
-        inReplyTo: lastIncoming?.messageId ?? undefined,
+        inReplyTo: replyTarget?.messageId ?? undefined,
         attachments: files.length
           ? files.map(({ filename, contentType, content }) => ({ filename, contentType, content }))
           : undefined,
       })
       setDraft('')
       setFiles([])
+      setSubject('')
+      setReplyTarget(null)
     } catch (err) {
-      Alert.alert('Message not sent', (err as Error).message)
+      Alert.alert(t('chat.notSent'), (err as Error).message)
     } finally {
       setSending(false)
     }
@@ -189,6 +164,9 @@ export default function ConversationScreen() {
         >
           <Icon name="phoneCall" size={22} color={colors.text} />
         </Pressable>
+        <Pressable hitSlop={8} accessibilityLabel={t('chat.composeTraditional')} onPress={composeTraditional}>
+          <Icon name="mail" size={22} color={colors.text} />
+        </Pressable>
         <Pressable hitSlop={8} accessibilityLabel="More" onPress={() => setMenu(true)}>
           <Icon name="moreVertical" size={24} color={colors.text} />
         </Pressable>
@@ -211,12 +189,23 @@ export default function ConversationScreen() {
                 <Text style={[styles.dayText, { color: colors.textMuted }]}>{item.label}</Text>
               </View>
             ) : (
-              <Bubble key={item.mail.id} mail={item.mail} />
+              <ChatBubble
+                key={item.mail.id}
+                mail={item.mail}
+                original={item.mail.inReplyTo ? byMessageId.get(item.mail.inReplyTo) : undefined}
+                originalAuthor={
+                  item.mail.inReplyTo && byMessageId.get(item.mail.inReplyTo)
+                    ? authorOf(byMessageId.get(item.mail.inReplyTo)!)
+                    : undefined
+                }
+                replied={isReplied(item.mail)}
+                onReply={startReply}
+              />
             ),
           )}
           {!conversation && (
             <Text style={[styles.newChat, { color: colors.textMuted }]}>
-              Start a conversation with {person.address}
+              {t('chat.start', { address: person.address })}
             </Text>
           )}
         </ScrollView>
@@ -245,14 +234,53 @@ export default function ConversationScreen() {
           </ScrollView>
         )}
 
+        {replyTarget ? (
+          <View style={[styles.replyBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            <View style={[styles.replyQuote, { borderLeftColor: colors.primary, backgroundColor: colors.surfaceSunken }]}>
+              <Text style={[styles.replyAuthor, { color: colors.primary }]} numberOfLines={1}>
+                {t('chat.replyingTo')} {authorOf(replyTarget)}
+              </Text>
+              <Text style={[styles.replyText, { color: colors.textMuted }]} numberOfLines={1}>
+                {!isReply(replyTarget) && replyTarget.subject ? `${replyTarget.subject} · ` : ''}
+                {stripQuoted(replyTarget.text) || previewText(replyTarget, 80)}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => replyTraditional(replyTarget)}
+              hitSlop={8}
+              accessibilityLabel={t('chat.traditional')}
+            >
+              <Icon name="mail" size={22} color={colors.primary} />
+            </Pressable>
+            <Pressable onPress={() => setReplyTarget(null)} hitSlop={8} accessibilityLabel={t('chat.cancelReply')}>
+              <Icon name="close" size={22} color={colors.textMuted} />
+            </Pressable>
+          </View>
+        ) : (
+          <View style={[styles.subjectRow, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            <Text style={[styles.subjectLabel, { color: colors.textMuted }]}>{t('chat.subject')}</Text>
+            <TextInput
+              value={subject}
+              onChangeText={setSubject}
+              placeholderTextColor={colors.textSubtle}
+              selectionColor={colors.primary}
+              keyboardAppearance={scheme}
+              returnKeyType="next"
+              onSubmitEditing={() => input.current?.focus()}
+              style={[styles.subjectInput, { color: colors.text }]}
+            />
+          </View>
+        )}
+
         <View style={[styles.composer, { backgroundColor: colors.surface }]}>
           <Pressable onPress={() => setPicking(true)} hitSlop={8} accessibilityLabel="Attach">
             <Icon name="paperclip" size={24} color={colors.textMuted} />
           </Pressable>
           <TextInput
+            ref={input}
             value={draft}
             onChangeText={setDraft}
-            placeholder="Type a reply..."
+            placeholder={t('chat.typeMessage')}
             placeholderTextColor={colors.textSubtle}
             selectionColor={colors.primary}
             keyboardAppearance={scheme}
@@ -260,7 +288,7 @@ export default function ConversationScreen() {
             style={[styles.input, { backgroundColor: colors.surfaceSunken, color: colors.text }]}
           />
           <Pressable
-            onPress={() => void reply()}
+            onPress={() => void submit()}
             disabled={sending}
             style={[styles.send, { backgroundColor: colors.primary }]}
             accessibilityLabel="Send"
@@ -286,7 +314,7 @@ export default function ConversationScreen() {
           {
             label: t('chat.newEmail'),
             icon: 'pencil',
-            onPress: () => router.push({ pathname: '/compose', params: { to: person.address } }),
+            onPress: composeTraditional,
           },
           ...(conversation
             ? [
@@ -341,26 +369,27 @@ const styles = StyleSheet.create({
   thread: { padding: spacing.lg, gap: spacing.md, flexGrow: 1 },
   day: { alignSelf: 'center', paddingHorizontal: spacing.md + 2, paddingVertical: 4, borderRadius: radius.full },
   dayText: { fontSize: font.small, fontWeight: '500' },
-  bubble: { maxWidth: '82%', paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm, borderRadius: 18 },
-  bubbleTheirs: { alignSelf: 'flex-start', borderTopLeftRadius: 6 },
-  bubbleMine: { alignSelf: 'flex-end', borderBottomRightRadius: 6 },
-  bubbleSubject: { fontSize: font.body, fontWeight: '600', marginBottom: 4 },
-  bubbleText: { fontSize: font.body + 1, lineHeight: 23 },
-  file: {
+  newChat: { textAlign: 'center', marginTop: 48, fontSize: font.small + 1 },
+  replyBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    minWidth: 230,
-    padding: spacing.md,
-    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  fileSpaced: { marginTop: spacing.sm },
-  fileInfo: { flex: 1, minWidth: 0 },
-  fileName: { fontSize: font.body, fontWeight: '600' },
-  fileSize: { fontSize: font.small, marginTop: 2 },
-  meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 },
-  time: { fontSize: font.caption },
-  newChat: { textAlign: 'center', marginTop: 48, fontSize: font.small + 1 },
+  replyQuote: { flex: 1, borderLeftWidth: 3, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 6 },
+  replyAuthor: { fontSize: font.small, fontWeight: '600' },
+  replyText: { fontSize: font.small, marginTop: 1 },
+  subjectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  subjectLabel: { fontSize: font.small, fontWeight: '600' },
+  subjectInput: { flex: 1, fontSize: font.body, paddingVertical: spacing.sm },
   pending: { flexGrow: 0, borderTopWidth: StyleSheet.hairlineWidth },
   pendingRow: { gap: spacing.sm, padding: spacing.sm },
   pendingFile: {

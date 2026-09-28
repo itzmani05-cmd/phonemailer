@@ -84,6 +84,10 @@ export class AuthService {
     });
   }
 
+  ensureAccount(phone: Phone) {
+    return this.findOrCreate(phone);
+  }
+
   private async findOrCreate(phone: Phone) {
     const email = mailboxAddress(phone);
     const lastLoginAt = new Date();

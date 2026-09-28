@@ -48,6 +48,7 @@ import { TwilioVerifyService } from './verify.service';
     ApiAuthGuard,
     MailboxGuard,
     SmsService,
+    OtpService,
     ConfigModule,
   ],
 })

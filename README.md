@@ -56,6 +56,34 @@ account. India (+91, 10-digit mobiles starting 6–9) only for now.
   Fully automatic Android reading via the SMS Retriever API needs a development build and
   `ANDROID_SMS_APP_HASH` (appended to the SMS).
 
+## Sign-up by phone call (IVR) and SMS
+
+Users without a smartphone can create an account through the Twilio number:
+
+- **Call** it and press **1**. The account is created for the caller's number, the address is
+  read out twice, and it is also sent by SMS. If caller ID is missing or not an Indian mobile,
+  the caller types their number on the keypad and confirms it with a 6-digit SMS code.
+- **Text** `JOIN` to it. The reply contains the new address.
+
+These users have no app, so they get an SMS for every new email.
+
+Connecting a Twilio number (needs Twilio credit; trial accounts only accept verified callers):
+
+1. Expose the backend publicly, e.g. `ngrok http 3000` or `cloudflared tunnel --url http://localhost:3000`.
+2. Set `TWILIO_WEBHOOK_BASE_URL` to that URL (e.g. `https://abc123.ngrok.app`) and restart the
+   backend. It is used to check Twilio's request signatures.
+3. In the Twilio console, open the phone number and set
+   - Voice → *A call comes in* → Webhook, `POST https://<url>/twilio/voice`
+   - Messaging → *A message comes in* → Webhook, `POST https://<url>/twilio/sms`
+
+Every request must carry a valid `X-Twilio-Signature` when `TWILIO_AUTH_TOKEN` is set. Without
+it (development only) the endpoints accept unsigned requests, so they can be tried with curl:
+
+```bash
+curl -X POST localhost:3000/twilio/voice/menu -d From=+919876543210 -d Digits=1
+curl -X POST localhost:3000/twilio/sms -d From=+919876543210 -d Body=JOIN
+```
+
 ## Sending email (`POST /email/send`)
 
 Each send is saved as `PENDING` before SMTP, then marked `SENT` or `FAILED` (the error is
@@ -85,6 +113,16 @@ curl -X POST http://localhost:3000/email/send \
 `401` bad/missing API key, `502` relay refused or unreachable, `503` SMTP not configured.
 `GET /email/status` runs a live connection check. The SMTP connection is also checked at
 startup and logged; a failing relay doesn't stop the backend from booting.
+
+## Web
+
+- `/` — sign in with phone number + SMS code on one screen (one **Next** button, Terms of Service
+  link above it). The session token is kept in `localStorage`; an expired token returns to sign-in.
+- `/register` — registration portal: phone + code only. It creates the account, shows the new
+  address and resets the form for the next person without signing in.
+- `/terms` — Terms of Service.
+- Profile & settings (gear icon or account menu): photo, name, alias IDs, language
+  (English / Tamil / Hindi, shared with the mobile app from `shared/i18n`), theme, sign out.
 
 ## Colors / theme
 

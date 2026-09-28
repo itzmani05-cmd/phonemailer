@@ -8,6 +8,7 @@ import { EmailModule } from './email/email.module';
 import { MailModule } from './mail/mail.module';
 import { MessagesModule } from './messages/messages.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { TelephonyModule } from './telephony/telephony.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PrismaModule } from './prisma/prisma.module';
     MailModule,
     MessagesModule,
     EmailModule,
+    TelephonyModule,
   ],
   controllers: [AppController, AccountController],
   providers: [AppService],

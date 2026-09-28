@@ -34,12 +34,14 @@ function RecipientField({
   onChange,
   trailing,
   autoFocus,
+  locked,
 }: {
   label: string
   values: string[]
   onChange: (v: string[]) => void
   trailing?: ReactNode
   autoFocus?: boolean
+  locked?: boolean
 }) {
   const { colors, scheme } = useTheme()
   const [text, setText] = useState('')
@@ -60,6 +62,7 @@ function RecipientField({
         {values.map((v) => (
           <Pressable
             key={v}
+            disabled={locked}
             onPress={() => onChange(values.filter((x) => x !== v))}
             style={[
               styles.chip,
@@ -70,27 +73,33 @@ function RecipientField({
             <Text style={[styles.chipText, { color: EMAIL_RE.test(v) ? colors.text : colors.danger }]}>
               {v}
             </Text>
-            <Icon name="close" size={12} color={colors.textMuted} />
+            {locked ? (
+              <Icon name="shield" size={12} color={colors.textMuted} />
+            ) : (
+              <Icon name="close" size={12} color={colors.textMuted} />
+            )}
           </Pressable>
         ))}
-        <TextInput
-          value={text}
-          autoFocus={autoFocus}
-          onChangeText={(t) => (/[,;\s]$/.test(t) ? commit(t) : setText(t))}
-          onSubmitEditing={() => commit()}
-          onBlur={() => commit()}
-          onKeyPress={(e) => {
-            if (e.nativeEvent.key === 'Backspace' && !text && values.length) onChange(values.slice(0, -1))
-          }}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardAppearance={scheme}
-          selectionColor={colors.primary}
-          blurOnSubmit={false}
-          style={[styles.recipientInput, { color: colors.text }]}
-          accessibilityLabel={label}
-        />
+        {!locked && (
+          <TextInput
+            value={text}
+            autoFocus={autoFocus}
+            onChangeText={(t) => (/[,;\s]$/.test(t) ? commit(t) : setText(t))}
+            onSubmitEditing={() => commit()}
+            onBlur={() => commit()}
+            onKeyPress={(e) => {
+              if (e.nativeEvent.key === 'Backspace' && !text && values.length) onChange(values.slice(0, -1))
+            }}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardAppearance={scheme}
+            selectionColor={colors.primary}
+            blurOnSubmit={false}
+            style={[styles.recipientInput, { color: colors.text }]}
+            accessibilityLabel={label}
+          />
+        )}
       </View>
       {trailing}
     </View>
@@ -98,7 +107,14 @@ function RecipientField({
 }
 
 export default function ComposeScreen() {
-  const params = useLocalSearchParams<{ to?: string; subject?: string; body?: string; inReplyTo?: string }>()
+  const params = useLocalSearchParams<{
+    to?: string
+    subject?: string
+    body?: string
+    inReplyTo?: string
+    locked?: string
+  }>()
+  const locked = params.locked === '1' && !!params.to
   const { colors, scheme } = useTheme()
   const { send } = useMail()
   const [to, setTo] = useState<string[]>(params.to ? params.to.split(',') : [])
@@ -144,8 +160,8 @@ export default function ComposeScreen() {
     try {
       await send({
         to,
-        cc: cc.length ? cc : undefined,
-        bcc: bcc.length ? bcc : undefined,
+        cc: !locked && cc.length ? cc : undefined,
+        bcc: !locked && bcc.length ? bcc : undefined,
         subject: subject.trim() || '(no subject)',
         text: body.trim() ? body : ' ',
         inReplyTo: params.inReplyTo,
@@ -191,13 +207,16 @@ export default function ComposeScreen() {
             values={to}
             onChange={setTo}
             autoFocus={!params.to}
+            locked={locked}
             trailing={
-              <Pressable onPress={() => setShowCc((s) => !s)} hitSlop={8} accessibilityLabel="Show Cc and Bcc">
-                <Icon name={showCc ? 'chevronUp' : 'chevronDown'} size={20} color={colors.textMuted} />
-              </Pressable>
+              locked ? undefined : (
+                <Pressable onPress={() => setShowCc((s) => !s)} hitSlop={8} accessibilityLabel="Show Cc and Bcc">
+                  <Icon name={showCc ? 'chevronUp' : 'chevronDown'} size={20} color={colors.textMuted} />
+                </Pressable>
+              )
             }
           />
-          {showCc ? (
+          {locked ? null : showCc ? (
             <>
               <RecipientField label="Cc" values={cc} onChange={setCc} />
               <RecipientField label="Bcc" values={bcc} onChange={setBcc} />

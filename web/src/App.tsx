@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Compose } from './components/Compose'
 import { MailList, PAGE_SIZE } from './components/MailList'
 import { MailReader } from './components/MailReader'
+import { Settings } from './components/Settings'
 import { Sidebar } from './components/Sidebar'
 import { TopBar, type SearchFilters } from './components/TopBar'
 import { useMailbox } from './hooks/useMailbox'
@@ -53,6 +54,7 @@ const App = () => {
   const [compose, setCompose] = useState<ComposeDraft | null>(null)
   const [composeKey, setComposeKey] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [screen, setScreen] = useState<'mail' | 'settings'>('mail')
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000)
@@ -99,6 +101,7 @@ const App = () => {
     setFilters(NO_FILTERS)
     resetList()
     setMenuOpen(false)
+    setScreen('mail')
   }
 
   const open = (mail: Mail) => {
@@ -153,11 +156,6 @@ const App = () => {
             setQuery(q)
             resetList()
           }}
-          filters={filters}
-          onFiltersChange={(f) => {
-            setFilters(f)
-            resetList()
-          }}
           account={box.account}
           notifications={notifications}
           onOpenMail={(m) => {
@@ -165,60 +163,71 @@ const App = () => {
             setCategory(m.category)
             open(m)
           }}
-          theme={theme}
-          onThemeChange={setTheme}
+          onOpenSettings={() => setScreen('settings')}
           onMenu={() => setMenuOpen(true)}
         />
 
-        <div className="content">
-          <MailList
-            view={view}
-            showTabs={showTabs}
-            category={category}
-            onCategoryChange={(c) => {
-              setCategory(c)
-              resetList()
-            }}
-            mails={pageMails}
-            total={visible.length}
-            page={page}
-            onPageChange={(p) => {
-              setPage(p)
-              setChecked(new Set())
-            }}
-            selectedId={selectedId}
-            checked={checked}
-            onCheckedChange={setChecked}
-            loading={box.loading}
-            error={box.error}
-            emptyText={emptyText}
-            onOpen={open}
-            onRefresh={() => void box.refresh()}
-            onBulk={bulk}
-            onMarkAllRead={() =>
-              void box.updateMany(
-                visible.filter((m) => !m.read).map((m) => m.id),
-                { read: true },
-              )
-            }
-          />
-          <MailReader
-            key={selected?.id}
-            mail={selected}
-            account={box.account}
-            labels={box.labels}
-            onBack={() => setSelectedId(null)}
-            onUpdate={updateSelected}
-            onDeleteForever={() => {
-              if (!selected) return
-              void box.removeMany([selected.id])
-              setSelectedId(null)
-            }}
-            onReply={(mode: ReplyMode) => {
-              if (selected) openCompose(replyDraft(selected, mode, box.account?.address))
-            }}
-          />
-        </div>
+        {screen === 'settings' ? (
+          <div className="content content-settings">
+            <Settings
+              account={box.account}
+              onAccountChange={box.setAccount}
+              theme={theme}
+              onThemeChange={setTheme}
+              onClose={() => setScreen('mail')}
+            />
+          </div>
+        ) : (
+          <div className="content">
+            <MailList
+              view={view}
+              showTabs={showTabs}
+              category={category}
+              onCategoryChange={(c) => {
+                setCategory(c)
+                resetList()
+              }}
+              mails={pageMails}
+              total={visible.length}
+              page={page}
+              onPageChange={(p) => {
+                setPage(p)
+                setChecked(new Set())
+              }}
+              selectedId={selectedId}
+              checked={checked}
+              onCheckedChange={setChecked}
+              loading={box.loading}
+              error={box.error}
+              emptyText={emptyText}
+              onOpen={open}
+              onRefresh={() => void box.refresh()}
+              onBulk={bulk}
+              onMarkAllRead={() =>
+                void box.updateMany(
+                  visible.filter((m) => !m.read).map((m) => m.id),
+                  { read: true },
+                )
+              }
+            />
+            <MailReader
+              key={selected?.id}
+              mail={selected}
+              account={box.account}
+              labels={box.labels}
+              onBack={() => setSelectedId(null)}
+              onUpdate={updateSelected}
+              onDeleteForever={() => {
+                if (!selected) return
+                void box.removeMany([selected.id])
+                setSelectedId(null)
+              }}
+              onReply={(mode: ReplyMode) => {
+                if (selected) openCompose(replyDraft(selected, mode, box.account?.address))
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {compose && (

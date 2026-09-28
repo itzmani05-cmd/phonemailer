@@ -20,8 +20,8 @@ Legend: ✅ done · 🟡 partly done · ❌ not started
 | Correct "From" address on mail to outside addresses | 🟡 | Gmail SMTP rewrites From to the Gmail account. Fine between PhoneMail users (local delivery). |
 | Drafts / Spam / Trash / Favorites (starred) | 🟡 | Folder + starred stored per message in Postgres; saving drafts from the apps not built yet. |
 | SMS notification on new email | ✅ | "You have received an email from <Sender>. Subject: <Subject>." sent via Twilio for users without the app (`User.mobileAppAt` unset; set when the mobile app signs in or opens). Real SMS needs Twilio credit; dev mode logs it. |
-| Toll-free IVR sign-up (call, press 1) | ❌ | Twilio Voice webhook. |
-| Sign-up by SMS | ❌ | Twilio incoming SMS webhook. |
+| Toll-free IVR sign-up (call, press 1) | ✅ | `POST /twilio/voice` → press 1 → account for caller ID, address read out + SMS. No/foreign caller ID → keypad number + SMS code. Signature-checked. Live calls need Twilio credit + public URL (README). |
+| Sign-up by SMS | ✅ | `POST /twilio/sms`: text JOIN → account + address in the reply. |
 | Alias IDs | ✅ | `Alias` table; `POST/DELETE /account/aliases`; mail to alias@domain reaches the owner. Receive-only (sending as an alias not built). |
 | Password login fallback | ❌ | Only needed if no OTP provider is available (dev-mode OTP may be enough). |
 
@@ -39,10 +39,10 @@ Legend: ✅ done · 🟡 partly done · ❌ not started
 | Top-right profile icon → settings | ✅ | Profile photo top-right → profile & settings: photo, name, phone, address, alias IDs (up to 5, receive mail), language, theme. |
 | Compose button bottom-right (traditional view) | ✅ | Floating button bottom-right; centre Compose tab removed. |
 | Chat view: search a number → open chat → type | ✅ | Typing a number/PhoneMail address in search offers "Start a chat with …". |
-| Compact Subject field above message box (hidden when replying) | ❌ | 
-| Swipe right to reply / tag original message; reply only once per message | ❌  |
-| Tap long email → traditional view, Reply at bottom | 🟡 | `mail/[id].tsx` exists. |
-| Traditional compose from inside chat with **locked** To | 🟡 | To is pre-filled but editable. |
+| Compact Subject field above message box (hidden when replying) | ✅ | Subject row above the message box for new emails; replaced by a "Replying to" bar when replying. New emails show their subject at the top of the bubble. |
+| Swipe right to reply / tag original message; reply only once per message | ✅ | Swipe right (or long-press) tags the message; the reply shows the original quoted. Replied messages show "Replied" and can't be replied to again (chat + reader). |
+| Tap long email → traditional view, Reply at bottom | ✅ | Long bodies cut at 600 chars with "Tap to read the full email"; reader has Reply at the bottom. |
+| Traditional compose from inside chat with **locked** To | ✅ | ✉ button in the chat header (camera-tab spot) and "Reply in traditional view" from the reply bar; To locked, no Cc/Bcc. |
 | Group chat when composing to 2+ recipients | ❌ | 1:1 mail stays in 1:1 chat. |
 | WhatsApp design language throughout | 🟡 | Review every screen. |
 | ⭐ PhoneMail ID card (extra) | ✅ | More → profile card: name, number, address, QR. Scan → that person's card → Send Email / Chat / Share. QR = `phonemailer://u/<number>?name=…`. |
@@ -51,9 +51,9 @@ Legend: ✅ done · 🟡 partly done · ❌ not started
 | Item | Status | Notes |
 |---|---|---|
 | Gmail-like inbox, reader, compose | ✅ | |
-| Login: one screen — phone, OTP, **Next**, "By signing up, you agree to the Terms of Service" link | ❌ | Backend API is ready. |
-| Separate registration portal (phone + OTP only, fields reset after each account) | ❌ | |
-| Profile & Settings pages | ❌ | |
+| Login: one screen — phone, OTP, **Next**, "By signing up, you agree to the Terms of Service" link | ✅ | Web signs in with its own token; no more ACCOUNT_PHONE fallback from the browser. Sign out in the account menu/settings. |
+| Separate registration portal (phone + OTP only, fields reset after each account) | ✅ | `/register`: creates the account, shows its address, resets the form, never signs in. |
+| Profile & Settings pages | ✅ | Photo, name, phone, address, alias IDs, language (EN/TA/HI), theme, sign out. |
 
 
 ## 2. What to do next (in order)
@@ -64,10 +64,10 @@ Brief says **prioritise the mobile client**, so mobile blocks come first after t
 2. ~~**Per-user mailbox in Postgres**~~ ✅ done 2026-09-28 (received mail per user, local PhoneMail → PhoneMail delivery).
 3. **Mobile sign-up flow in spec order**: Language → Terms → Phone (SIM auto-detect) → OTP (auto-detect), with permission prompts at each step.
 4. **Mobile home to spec**: chips All/Unread/Attachments/Favorites, menu left + profile right, Compose bottom-right.
-5. **Mobile chat to spec**: subject field (hidden on reply), swipe-to-reply linked to the original, reply once per message, locked To in traditional view, group chats.
-6. **Settings/profile**: ✅ mobile done; web profile & settings still to do.
-7. **Web**: single-screen phone+OTP login with Terms link; separate registration portal; profile & settings.
-8. **Twilio features**: ~~SMS notification on new mail~~ ✅; toll-free IVR "press 1" sign-up; sign-up by SMS. Needs Twilio credit (trial expired) — upgrade or a new trial.
+5. **Mobile chat to spec**: ✅ subject, swipe-to-reply, reply once, locked To, traditional view done; **group chats** still to do.
+6. **Settings/profile**: ✅ mobile and web.
+7. **Web**: ✅ login, `/register` portal, `/terms`, profile & settings.
+8. **Twilio features**: ~~SMS notification on new mail~~ ✅; ~~IVR "press 1" sign-up~~ ✅; ~~sign-up by SMS~~ ✅ (code done; live test needs credit). Needs Twilio credit (trial expired) — upgrade or a new trial.
 9. **Docker**: `docker compose up -d` from a clean clone, migrations run automatically.
 10. **README + demo**: document everything; screenshots of mobile and web.
 

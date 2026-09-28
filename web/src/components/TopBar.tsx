@@ -1,8 +1,8 @@
-import type { IconName } from '@shared/icons'
 import { senderName, type Account, type Mail } from '@shared/mail'
 import { useState } from 'react'
-import type { ThemePreference } from '../theme/useThemePreference'
-import { Avatar } from './Avatar'
+import { signOut } from '../auth/session'
+import { useT } from '../i18n'
+import { AccountAvatar, Avatar } from './Avatar'
 import { Icon } from './Icon'
 import { Menu, MenuItem } from './Menu'
 
@@ -15,36 +15,16 @@ export interface SearchFilters {
 interface Props {
   query: string
   onQueryChange: (q: string) => void
-  filters: SearchFilters
-  onFiltersChange: (f: SearchFilters) => void
   account: Account | null
   notifications: Mail[]
   onOpenMail: (mail: Mail) => void
-  theme: ThemePreference
-  onThemeChange: (t: ThemePreference) => void
+  onOpenSettings: () => void
   onMenu: () => void
 }
 
-const THEMES: { id: ThemePreference; label: string; icon: IconName }[] = [
-  { id: 'light', label: 'Light', icon: 'sun' },
-  { id: 'system', label: 'System', icon: 'monitor' },
-  { id: 'dark', label: 'Dark', icon: 'moon' },
-]
-
-export function TopBar({
-  query,
-  onQueryChange,
-  filters,
-  onFiltersChange,
-  account,
-  notifications,
-  onOpenMail,
-  theme,
-  onThemeChange,
-  onMenu,
-}: Props) {
+export function TopBar({ query, onQueryChange, account, notifications, onOpenMail, onOpenSettings, onMenu }: Props) {
+  const t = useT()
   const [copied, setCopied] = useState(false)
-  const activeFilters = Object.values(filters).filter(Boolean).length
 
   const copyAddress = async () => {
     if (!account) return
@@ -66,7 +46,7 @@ export function TopBar({
         <Icon name="search" size={20} />
         <input
           type="search"
-          placeholder="Search emails, contacts, or keywords..."
+          placeholder={t('web.search')}
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
         />
@@ -77,8 +57,8 @@ export function TopBar({
           <button
             className="address-pill"
             onClick={() => void copyAddress()}
-            title={copied ? 'Copied' : 'Copy your PhoneMail address'}
-            aria-label={copied ? 'Address copied' : `Copy address ${account.address}`}
+            title={copied ? t('web.copied') : t('web.copyAddress')}
+            aria-label={copied ? t('web.copied') : `${t('web.copyAddress')} ${account.address}`}
           >
             <span className="online-dot" aria-hidden />
             <span className="address-text">{account.address}</span>
@@ -92,8 +72,8 @@ export function TopBar({
             <button
               className="icon-button topbar-icon bell"
               onClick={toggle}
-              aria-label="Notifications"
-              title="Notifications"
+              aria-label={t('web.notifications')}
+              title={t('web.notifications')}
             >
               <Icon name="bell" size={20} />
               {notifications.length > 0 && <span className="bell-dot" />}
@@ -102,9 +82,9 @@ export function TopBar({
         >
           {(close) => (
             <div className="notifications">
-              <div className="menu-heading">Notifications</div>
+              <div className="menu-heading">{t('web.notifications')}</div>
               {notifications.length === 0 ? (
-                <p className="menu-empty">You’re all caught up.</p>
+                <p className="menu-empty">{t('web.caughtUp')}</p>
               ) : (
                 notifications.slice(0, 6).map((m) => (
                   <MenuItem
@@ -126,43 +106,20 @@ export function TopBar({
           )}
         </Menu>
 
-        <Menu
-          align="right"
-          trigger={({ toggle }) => (
-            <button
-              className="icon-button topbar-icon"
-              onClick={toggle}
-              aria-label="Settings"
-              title="Settings"
-            >
-              <Icon name="settings" size={20} />
-            </button>
-          )}
+        <button
+          className="icon-button topbar-icon"
+          onClick={onOpenSettings}
+          aria-label={t('web.settingsTitle')}
+          title={t('web.settingsTitle')}
         >
-          {() => (
-            <>
-              <div className="menu-heading">Theme</div>
-              {THEMES.map((t) => (
-                <MenuItem key={t.id} checked={theme === t.id} onSelect={() => onThemeChange(t.id)}>
-                  <Icon name={t.icon} size={16} />
-                  {t.label}
-                  <Icon name="check" size={16} className="menu-check menu-item-end" />
-                </MenuItem>
-              ))}
-            </>
-          )}
-        </Menu>
+          <Icon name="settings" size={20} />
+        </button>
 
         <Menu
           align="right"
           trigger={({ toggle }) => (
-            <button
-              className="avatar-button"
-              onClick={toggle}
-              aria-label="Account"
-              title={account?.name ?? 'Account'}
-            >
-              <Avatar name={account?.name ?? '?'} size={34} tone="account" />
+            <button className="avatar-button" onClick={toggle} aria-label="Account" title={account?.name ?? 'Account'}>
+              <AccountAvatar account={account} size={34} />
             </button>
           )}
         >
@@ -174,6 +131,15 @@ export function TopBar({
                   <span>{account.address}</span>
                 </div>
               )}
+              <MenuItem
+                onSelect={() => {
+                  onOpenSettings()
+                  close()
+                }}
+              >
+                <Icon name="settings" size={16} />
+                {t('web.settingsTitle')}
+              </MenuItem>
               {account && (
                 <MenuItem
                   onSelect={() => {
@@ -182,9 +148,14 @@ export function TopBar({
                   }}
                 >
                   <Icon name={copied ? 'check' : 'copy'} size={16} />
-                  {copied ? 'Copied' : 'Copy address'}
+                  {copied ? t('web.copied') : t('web.copyAddress')}
                 </MenuItem>
               )}
+              <div className="menu-separator" />
+              <MenuItem danger onSelect={signOut}>
+                <Icon name="logout" size={16} />
+                {t('menu.signOut')}
+              </MenuItem>
             </>
           )}
         </Menu>

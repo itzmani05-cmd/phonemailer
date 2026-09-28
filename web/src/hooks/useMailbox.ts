@@ -1,6 +1,9 @@
-import type { Account, Label, Mail, MailChanges, SendEmailRequest } from '@shared/mail'
+import { ApiError, type Account, type Label, type Mail, type MailChanges, type SendEmailRequest } from '@shared/mail'
 import { useCallback, useEffect, useState } from 'react'
 import { mailApi } from '../api/mail'
+import { signOut } from '../auth/session'
+
+const expired = (err: unknown) => err instanceof ApiError && err.status === 401
 
 const POLL_MS = 5000
 
@@ -15,7 +18,8 @@ export function useMailbox() {
     try {
       setMails(await mailApi.list())
       setError(null)
-    } catch {
+    } catch (err) {
+      if (expired(err)) return signOut()
       setError('Can’t reach the server. Retrying…')
     } finally {
       setLoading(false)
@@ -25,7 +29,10 @@ export function useMailbox() {
   useEffect(() => {
     void refresh()
     mailApi.labels().then(setLabels).catch(() => {})
-    mailApi.account().then(setAccount).catch(() => {})
+    mailApi
+      .account()
+      .then(setAccount)
+      .catch((err: unknown) => expired(err) && signOut())
     const timer = setInterval(() => void refresh(), POLL_MS)
     return () => clearInterval(timer)
   }, [refresh])
@@ -80,6 +87,7 @@ export function useMailbox() {
     mails,
     labels,
     account,
+    setAccount,
     loading,
     error,
     refresh,
