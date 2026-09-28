@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AccountController } from './account/account.controller';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
 import { EmailModule } from './email/email.module';
 import { MailModule } from './mail/mail.module';
 import { MessagesModule } from './messages/messages.module';
@@ -13,6 +14,7 @@ import { PrismaModule } from './prisma/prisma.module';
     // Real env vars (Docker, CI) win over values in backend/.env.
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     PrismaModule,
+    AuthModule,
     MailModule,
     MessagesModule,
     EmailModule,

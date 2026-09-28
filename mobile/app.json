@@ -32,7 +32,8 @@
         {
           "photosPermission": "PhoneMail needs access to your photos so you can attach them to emails."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "scheme": "phonemailer",
     "experiments": {

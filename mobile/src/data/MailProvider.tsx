@@ -1,5 +1,5 @@
 import {
-  createMailApi,
+  ApiError,
   type Account,
   type Label,
   type Mail,
@@ -16,10 +16,11 @@ import {
   type ReactNode,
 } from 'react'
 import { AppState } from 'react-native'
+import { api } from './api'
+import { useAuth } from './auth'
 import { API_URL } from './config'
 
 const POLL_MS = 5000
-export const api = createMailApi(API_URL)
 
 interface MailContextValue {
   mails: Mail[]
@@ -39,23 +40,47 @@ interface MailContextValue {
 const MailContext = createContext<MailContextValue | null>(null)
 
 export function MailProvider({ children }: { children: ReactNode }) {
-  const [mails, setMails] = useState<Mail[]>([])
+  const { status, token, signOut } = useAuth()
+  const signedIn = status === 'signedIn'
+  // Tagged with the session token that loaded them, so signing in as someone
+  // else never shows the previous user's mailbox, even for a moment.
+  const [inbox, setInbox] = useState<{ owner: string | null; mails: Mail[] }>({
+    owner: null,
+    mails: [],
+  })
+  const [profile, setProfile] = useState<{ owner: string | null; account: Account | null }>({
+    owner: null,
+    account: null,
+  })
   const [labels, setLabels] = useState<Label[]>([])
-  const [account, setAccount] = useState<Account | null>(null)
-  const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
-      setMails(await api.list())
+      const mails = await api.list()
+      setInbox({ owner: token, mails })
       setError(null)
-    } catch {
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        void signOut()
+        return
+      }
       setError(`Can’t reach the server at ${API_URL}. Retrying…`)
-    } finally {
-      setLoading(false)
     }
-  }, [])
+  }, [token, signOut])
+
+  const mails = useMemo(
+    () => (signedIn && inbox.owner === token ? inbox.mails : []),
+    [signedIn, inbox, token],
+  )
+  const account = signedIn && profile.owner === token ? profile.account : null
+  const loading = signedIn && inbox.owner !== token && !error
+  const setMails = useCallback(
+    (update: (prev: Mail[]) => Mail[]) =>
+      setInbox((prev) => ({ ...prev, mails: update(prev.mails) })),
+    [],
+  )
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
@@ -63,15 +88,31 @@ export function MailProvider({ children }: { children: ReactNode }) {
     setRefreshing(false)
   }, [load])
 
-  useEffect(() => {
-    api.labels().then(setLabels).catch(() => {})
-    api.account().then(setAccount).catch(() => {})
-  }, [])
+  /**
+   * Confirms the session with the server and loads its mailbox profile.
+   * An expired token or deleted account (401) signs the app out.
+   */
+  const checkSession = useCallback(async () => {
+    try {
+      const { account: a } = await api.me()
+      setProfile({ owner: token, account: a })
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) void signOut()
+    }
+  }, [token, signOut])
 
-  // Poll only while the app is in the foreground.
   useEffect(() => {
+    if (!signedIn) return
+    api.labels().then(setLabels).catch(() => {})
+  }, [signedIn, token])
+
+  // Poll only while signed in and the app is in the foreground.
+  useEffect(() => {
+    if (!signedIn) return
     let timer: ReturnType<typeof setInterval> | undefined
+    // On launch and each return to the foreground: re-check the session, then poll.
     const start = () => {
+      void checkSession()
       void load()
       timer ??= setInterval(() => void load(), POLL_MS)
     }
@@ -87,7 +128,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       stop()
       sub.remove()
     }
-  }, [load])
+  }, [load, checkSession, signedIn])
 
   const updateMany = useCallback(
     async (ids: string[], changes: MailChanges) => {
@@ -99,7 +140,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
         void load()
       }
     },
-    [load],
+    [load, setMails],
   )
 
   const update = useCallback(
@@ -117,7 +158,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
         void load()
       }
     },
-    [load],
+    [load, setMails],
   )
 
   const send = useCallback(

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { parsePhone } from '../auth/phone';
 import { PrismaService } from '../prisma/prisma.service';
 
 const INCLUDE = { recipients: true, attachments: true } as const;
@@ -29,13 +30,12 @@ export class MessagesService {
   /** Records the message before it is handed to SMTP. */
   async createPending(msg: NewMessage) {
     const email = addressOf(msg.fromHeader);
-    const local = email.split('@')[0];
     const sender = await this.prisma.user.upsert({
       where: { email },
       update: {},
       create: {
         email,
-        phone: /^\d+$/.test(local) ? local : null,
+        phone: parsePhone(email.split('@')[0])?.e164 ?? null,
         name: process.env.ACCOUNT_NAME || null,
       },
     });
@@ -74,19 +74,23 @@ export class MessagesService {
     });
   }
 
-  list() {
+  /** All sent messages, or only one user's. */
+  list(senderId?: string) {
     return this.prisma.message.findMany({
+      where: { senderId },
       orderBy: { createdAt: 'desc' },
       include: INCLUDE,
     });
   }
 
-  async get(id: string) {
+  async get(id: string, senderId?: string) {
     const message = await this.prisma.message.findUnique({
       where: { id },
       include: INCLUDE,
     });
-    if (!message) throw new NotFoundException();
+    if (!message || (senderId && message.senderId !== senderId)) {
+      throw new NotFoundException();
+    }
     return message;
   }
 }

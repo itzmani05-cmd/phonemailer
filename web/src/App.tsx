@@ -139,8 +139,6 @@ const App = () => {
         view={view}
         onViewChange={changeView}
         counts={counts}
-        labels={box.labels}
-        onCreateLabel={box.createLabel}
         storageUsed={storageUsed}
         storageQuota={box.account?.storageQuotaBytes ?? 0}
         onCompose={() => {

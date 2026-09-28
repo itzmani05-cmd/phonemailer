@@ -16,3 +16,6 @@ function resolveApiUrl(): string {
 }
 
 export const API_URL = resolveApiUrl()
+
+/** Domain of PhoneMail addresses, shown as a preview while signing in. */
+export const MAIL_DOMAIN = process.env.EXPO_PUBLIC_MAIL_DOMAIN ?? 'phonemail.com'

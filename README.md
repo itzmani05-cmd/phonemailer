@@ -30,6 +30,32 @@ SMTP Message-ID/response or error), `Recipient` (email, `TO`/`CC`/`BCC`), `Attac
 (metadata only). `npm run db:studio` opens a browser view of the data. In Docker the backend
 runs `prisma migrate deploy` on start.
 
+## Phone sign-in (SMS OTP)
+
+The phone number is the account: `9876543210` → `+919876543210` (stored, E.164 only) →
+mailbox `9876543210@phonemail.com`. Signing in again with the same number returns the same
+account. India (+91, 10-digit mobiles starting 6–9) only for now.
+
+| Endpoint | Body | Result |
+| --- | --- | --- |
+| `POST /auth/otp/request` | `{"phone":"9876543210","countryCode":"+91"}` | `{"success":true,"phone":"+919876543210","expiresIn":300,"resendIn":30}` |
+| `POST /auth/otp/verify` | `{"phone":"9876543210","code":"123456"}` | `{"accessToken":"…","isNewUser":true,"user":{…},"account":{…}}` |
+| `GET /auth/me` | `Authorization: Bearer <token>` | current user + account |
+
+- Codes: 6 digits, valid 5 minutes, one active per number, stored only as an HMAC.
+  Limits: 30 s between requests, 5 requests/hour, 5 wrong attempts per code (then `429`).
+- Tokens: JWT (`JWT_SECRET`, `JWT_EXPIRES_IN_DAYS`, default 30). With a token,
+  `/email/send` sends as the user's own address, `/messages` shows only their mail, and
+  `/account` describes their mailbox. `EMAIL_API_KEY` still works for server-to-server calls.
+- SMS: Twilio (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, plus either `TWILIO_VERIFY_SERVICE_SID`
+  for Twilio Verify, which works on trial accounts, or `TWILIO_MESSAGING_SERVICE_SID` /
+  `TWILIO_FROM_NUMBER` for our own message text). **Without them (dev only) the code is printed in the backend log.**
+- Mobile: `sign-in` → `verify` screens (Expo Router). The code field uses the OS one-time-code
+  autofill (Android autofill service / iOS "From Messages"), submits itself when 6 digits
+  arrive, and supports paste and manual entry. The token is kept in `expo-secure-store`.
+  Fully automatic Android reading via the SMS Retriever API needs a development build and
+  `ANDROID_SMS_APP_HASH` (appended to the SMS).
+
 ## Sending email (`POST /email/send`)
 
 Each send is saved as `PENDING` before SMTP, then marked `SENT` or `FAILED` (the error is

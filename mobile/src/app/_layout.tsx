@@ -4,17 +4,19 @@ import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
 import { DrawerProvider } from '@/components/Drawer'
+import { AuthProvider, useAuth } from '@/data/auth'
 import { MailProvider } from '@/data/MailProvider'
 import { useOnboarded } from '@/data/onboarding'
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider'
 import { fontAssets, fonts } from '@/theme/fonts'
 
-// Keep the splash screen up until Inter and the onboarding flag are ready.
+// Keep the splash screen up until Inter, the onboarding flag and the saved session are ready.
 void SplashScreen.preventAutoHideAsync()
 
 function ThemedStack() {
   const { colors, scheme } = useTheme()
   const onboarded = useOnboarded()
+  const signedIn = useAuth().status === 'signedIn'
 
   return (
     <>
@@ -29,7 +31,8 @@ function ThemedStack() {
           contentStyle: { backgroundColor: colors.surface },
         }}
       >
-        <Stack.Protected guard={onboarded === true}>
+        {/* Guards are checked in order; the first open screen is where the app lands. */}
+        <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="conversation/[address]" />
           <Stack.Screen name="mail/[id]" />
@@ -38,9 +41,14 @@ function ThemedStack() {
           <Stack.Screen name="settings" options={{ headerShown: true, title: 'Settings' }} />
           <Stack.Screen name="help" options={{ headerShown: true, title: 'Help & Support' }} />
         </Stack.Protected>
-        <Stack.Protected guard={onboarded === false}>
+        <Stack.Protected guard={!signedIn && onboarded === false}>
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
+        <Stack.Protected guard={!signedIn}>
+          <Stack.Screen name="sign-in" />
+          <Stack.Screen name="verify" />
+        </Stack.Protected>
+        <Stack.Screen name="terms" options={{ headerShown: true, title: 'Terms & Conditions' }} />
       </Stack>
     </>
   )
@@ -49,7 +57,8 @@ function ThemedStack() {
 function Gate() {
   const [fontsLoaded, fontError] = useFonts(fontAssets)
   const onboarded = useOnboarded()
-  const ready = (fontsLoaded || !!fontError) && onboarded !== null
+  const { status } = useAuth()
+  const ready = (fontsLoaded || !!fontError) && onboarded !== null && status !== 'loading'
 
   useEffect(() => {
     if (ready) void SplashScreen.hideAsync()
@@ -63,11 +72,13 @@ function Gate() {
 export default function RootLayout() {
   return (
     <ThemeProvider>
-      <MailProvider>
-        <DrawerProvider>
-          <Gate />
-        </DrawerProvider>
-      </MailProvider>
+      <AuthProvider>
+        <MailProvider>
+          <DrawerProvider>
+            <Gate />
+          </DrawerProvider>
+        </MailProvider>
+      </AuthProvider>
     </ThemeProvider>
   )
 }

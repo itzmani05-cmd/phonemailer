@@ -3,7 +3,7 @@ import * as DocumentPicker from 'expo-document-picker'
 import { File } from 'expo-file-system'
 import * as ImagePicker from 'expo-image-picker'
 import { Linking, Platform } from 'react-native'
-import { api } from './MailProvider'
+import { api } from './api'
 
 export interface PickedFile extends OutgoingAttachment {
   size: number

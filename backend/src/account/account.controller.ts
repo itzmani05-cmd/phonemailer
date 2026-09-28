@@ -1,19 +1,29 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Req } from '@nestjs/common';
+import type { Request } from 'express';
+import { bearerToken } from '../auth/auth.guards';
+import { AuthService, toAccount } from '../auth/auth.service';
 
 const GB = 1024 ** 3;
 
 /**
- * The mailbox owner. There is no auth yet, so this is a single account
- * configured through env: PhoneMail addresses are <phone>@<MAIL_DOMAIN>.
+ * The mailbox owner: the signed-in user when a bearer token is sent,
+ * otherwise the single account configured through env (<phone>@<MAIL_DOMAIN>).
  */
 @Controller('account')
 export class AccountController {
+  constructor(private readonly auth: AuthService) {}
+
   @Get()
-  get() {
+  async get(@Req() req: Request) {
+    const token = bearerToken(req);
+    const user = token ? await this.auth.userFromToken(token) : null;
+    if (user) return toAccount(user);
+
     const phone = (process.env.ACCOUNT_PHONE ?? '').replace(/\D/g, '');
     const domain = process.env.MAIL_DOMAIN ?? 'phonemail.local';
     return {
-      name: process.env.ACCOUNT_NAME ?? 'Me',
+      // Like signed-in accounts: an unset name falls back to the number.
+      name: process.env.ACCOUNT_NAME || phone || 'Me',
       phone,
       countryCode: (process.env.ACCOUNT_COUNTRY_CODE ?? '').replace(/\D/g, ''),
       address:

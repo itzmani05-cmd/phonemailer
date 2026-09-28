@@ -13,12 +13,29 @@ datasource db {
 
 /// A PhoneMail account: <phone>@<MAIL_DOMAIN>.
 model User {
-  id        String    @id @default(uuid())
-  phone     String?   @unique
-  email     String    @unique
-  name      String?
-  createdAt DateTime  @default(now())
-  messages  Message[]
+  id          String    @id @default(uuid())
+  /// E.164, e.g. +919876543210 (the only stored format)
+  phone       String?   @unique
+  email       String    @unique
+  name        String?
+  createdAt   DateTime  @default(now())
+  lastLoginAt DateTime?
+  messages    Message[]
+}
+
+/// SMS login codes. Only an HMAC of the code is stored.
+model OtpCode {
+  id         String    @id @default(uuid())
+  /// E.164
+  phone      String
+  /// HMAC of our own code; null when Twilio Verify holds the code.
+  codeHash   String?
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, createdAt])
 }
 
 enum MessageStatus {

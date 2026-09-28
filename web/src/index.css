@@ -196,12 +196,9 @@ p {
 }
 
 .brand-mark {
-  display: inline-grid;
-  place-items: center;
+  display: block;
   flex: none;
-  border-radius: var(--radius-md);
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  object-fit: contain;
 }
 
 .chip {
@@ -564,9 +561,9 @@ p {
   gap: 12px;
   width: 552px;
   max-width: 100%;
-  height: 46px;
+  height: 43px;
   padding: 0 8px 0 16px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-full);
   background: var(--color-surface-sunken);
   color: var(--color-text-muted);
 }
@@ -608,7 +605,7 @@ p {
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 14px;
   margin-left: auto;
 }
 
@@ -621,6 +618,14 @@ p {
   border-radius: var(--radius-full);
   background: var(--color-surface-sunken);
   font-size: calc(14.5px * var(--font-scale));
+}
+
+.address-pill:hover {
+  background: var(--color-surface-hover);
+}
+
+.address-pill-icon {
+  color: var(--color-text-muted);
 }
 
 .online-dot {
@@ -637,9 +642,12 @@ p {
   white-space: nowrap;
 }
 
+.topbar-icon {
+  color: var(--color-text);
+}
+
 .bell {
   position: relative;
-  color: var(--color-text);
 }
 
 .bell-dot {
@@ -671,11 +679,20 @@ p {
   font-size: calc(13px * var(--font-scale));
 }
 
-.user-button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: calc(15px * var(--font-scale));
+.avatar-button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: var(--radius-full);
+}
+
+.avatar-button:hover,
+.avatar-button:focus-visible {
+  box-shadow: 0 0 0 3px var(--color-surface-hover);
+}
+
+.menu-item-end {
+  margin-left: auto;
 }
 
 /* ---------- Message list ---------- */
@@ -1356,10 +1373,6 @@ p {
 
   .app[data-view='list'] .reader-pane,
   .app[data-view='reader'] .list-pane {
-    display: none;
-  }
-
-  .user-name {
     display: none;
   }
 }

@@ -116,7 +116,9 @@ export default function OnboardingScreen() {
           <Text style={[styles.primaryText, { color: colors.onPrimary }]}>Get Started</Text>
         </Pressable>
         <Pressable onPress={() => void completeOnboarding()} style={styles.secondary} accessibilityRole="button">
-          <Text style={[styles.secondaryText, { color: colors.primary }]}>Sign In</Text>
+          <Text style={[styles.secondaryText, { color: colors.primary }]}>
+            I already have an account
+          </Text>
         </Pressable>
       </View>
     </SafeAreaView>

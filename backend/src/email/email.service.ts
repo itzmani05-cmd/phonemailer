@@ -13,6 +13,7 @@ import {
   type SMTPPoolSentMessageInfo,
   type Transporter,
 } from 'nodemailer';
+import type { AuthUser } from '../auth/auth.service';
 import { MailService } from '../mail/mail.service';
 import { MessagesService } from '../messages/messages.service';
 import { emailConfig, type EmailConfig } from './email.config';
@@ -111,8 +112,13 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async send(dto: SendEmailDto): Promise<SendResult> {
-    if (!this.transporter || !this.config.from) {
+  async send(dto: SendEmailDto, sender?: AuthUser): Promise<SendResult> {
+    const from = sender
+      ? sender.name
+        ? `"${sender.name.replace(/"/g, '')}" <${sender.email}>`
+        : sender.email
+      : this.config.from;
+    if (!this.transporter || !from) {
       throw new ServiceUnavailableException('Outbound email is not configured');
     }
 
@@ -132,7 +138,7 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
     let record: { id: string };
     try {
       record = await this.messagesService.createPending({
-        fromHeader: this.config.from,
+        fromHeader: from,
         to: dto.to,
         cc: dto.cc ?? [],
         bcc: dto.bcc ?? [],
@@ -156,7 +162,7 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
     let info: SMTPPoolSentMessageInfo;
     try {
       info = await this.transporter.sendMail({
-        from: this.config.from,
+        from,
         to: dto.to,
         cc: dto.cc,
         bcc: dto.bcc,
@@ -197,7 +203,7 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
     this.mailService.storeSent({
       id: record.id,
       messageId: info.messageId,
-      from: this.config.from,
+      from,
       to: dto.to,
       cc: dto.cc ?? [],
       subject: dto.subject,

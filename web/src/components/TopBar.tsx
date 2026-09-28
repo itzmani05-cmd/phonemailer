@@ -1,3 +1,4 @@
+import type { IconName } from '@shared/icons'
 import { senderName, type Account, type Mail } from '@shared/mail'
 import { useState } from 'react'
 import type { ThemePreference } from '../theme/useThemePreference'
@@ -24,10 +25,10 @@ interface Props {
   onMenu: () => void
 }
 
-const THEMES: { id: ThemePreference; label: string }[] = [
-  { id: 'light', label: 'Light' },
-  { id: 'system', label: 'System' },
-  { id: 'dark', label: 'Dark' },
+const THEMES: { id: ThemePreference; label: string; icon: IconName }[] = [
+  { id: 'light', label: 'Light', icon: 'sun' },
+  { id: 'system', label: 'System', icon: 'monitor' },
+  { id: 'dark', label: 'Dark', icon: 'moon' },
 ]
 
 export function TopBar({
@@ -70,79 +71,33 @@ export function TopBar({
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
         />
-        <Menu
-          align="right"
-          trigger={({ toggle }) => (
-            <button
-              type="button"
-              className="search-filter"
-              data-active={activeFilters > 0 || undefined}
-              onClick={toggle}
-              aria-label="Search filters"
-            >
-              <Icon name="sliders" size={20} />
-            </button>
-          )}
-        >
-          {() => (
-            <>
-              <div className="menu-heading">Show only</div>
-              {(
-                [
-                  ['unread', 'Unread'],
-                  ['starred', 'Starred'],
-                  ['attachments', 'Has attachment'],
-                ] as const
-              ).map(([key, label]) => (
-                <MenuItem
-                  key={key}
-                  checked={filters[key]}
-                  onSelect={() => onFiltersChange({ ...filters, [key]: !filters[key] })}
-                >
-                  <Icon name="check" size={16} className="menu-check" />
-                  {label}
-                </MenuItem>
-              ))}
-            </>
-          )}
-        </Menu>
       </label>
 
       <div className="topbar-right">
         {account && (
-          <Menu
-            align="right"
-            trigger={({ toggle }) => (
-              <button className="address-pill" onClick={toggle}>
-                <span className="online-dot" aria-label="Connected" />
-                <span className="address-text">{account.address}</span>
-                <Icon name="chevronDown" size={18} />
-              </button>
-            )}
+          <button
+            className="address-pill"
+            onClick={() => void copyAddress()}
+            title={copied ? 'Copied' : 'Copy your PhoneMail address'}
+            aria-label={copied ? 'Address copied' : `Copy address ${account.address}`}
           >
-            {(close) => (
-              <>
-                <div className="menu-heading">Your PhoneMail address</div>
-                <div className="menu-address">{account.address}</div>
-                <MenuItem
-                  onSelect={() => {
-                    void copyAddress()
-                    setTimeout(close, 600)
-                  }}
-                >
-                  <Icon name={copied ? 'check' : 'copy'} size={16} />
-                  {copied ? 'Copied' : 'Copy address'}
-                </MenuItem>
-              </>
-            )}
-          </Menu>
+            <span className="online-dot" aria-hidden />
+            <span className="address-text">{account.address}</span>
+            <Icon name={copied ? 'check' : 'copy'} size={17} className="address-pill-icon" />
+          </button>
         )}
 
+        {/* notification */}
         <Menu
           align="right"
           trigger={({ toggle }) => (
-            <button className="icon-button bell" onClick={toggle} aria-label="Notifications">
-              <Icon name="bell" size={22} />
+            <button
+              className="icon-button topbar-icon bell"
+              onClick={toggle}
+              aria-label="Notifications"
+              title="Notifications"
+            >
+              <Icon name="bell" size={20} />
               {notifications.length > 0 && <span className="bell-dot" />}
             </button>
           )}
@@ -161,7 +116,7 @@ export function TopBar({
                       close()
                     }}
                   >
-                    <Avatar name={senderName(m.from)} size={28} />
+                    <Avatar name={senderName(m.from)} size={18} />
                     <span className="notification-text">
                       <strong>{senderName(m.from)}</strong>
                       <span>{m.subject || '(no subject)'}</span>
@@ -176,14 +131,44 @@ export function TopBar({
         <Menu
           align="right"
           trigger={({ toggle }) => (
-            <button className="user-button" onClick={toggle}>
-              <Avatar name={account?.name ?? '?'} size={36} tone="account" />
-              <span className="user-name">{account?.name ?? ''}</span>
-              <Icon name="chevronDown" size={18} />
+            <button
+              className="icon-button topbar-icon"
+              onClick={toggle}
+              aria-label="Settings"
+              title="Settings"
+            >
+              <Icon name="settings" size={20} />
             </button>
           )}
         >
           {() => (
+            <>
+              <div className="menu-heading">Theme</div>
+              {THEMES.map((t) => (
+                <MenuItem key={t.id} checked={theme === t.id} onSelect={() => onThemeChange(t.id)}>
+                  <Icon name={t.icon} size={16} />
+                  {t.label}
+                  <Icon name="check" size={16} className="menu-check menu-item-end" />
+                </MenuItem>
+              ))}
+            </>
+          )}
+        </Menu>
+
+        <Menu
+          align="right"
+          trigger={({ toggle }) => (
+            <button
+              className="avatar-button"
+              onClick={toggle}
+              aria-label="Account"
+              title={account?.name ?? 'Account'}
+            >
+              <Avatar name={account?.name ?? '?'} size={34} tone="account" />
+            </button>
+          )}
+        >
+          {(close) => (
             <>
               {account && (
                 <div className="menu-profile">
@@ -191,13 +176,17 @@ export function TopBar({
                   <span>{account.address}</span>
                 </div>
               )}
-              <div className="menu-heading">Theme</div>
-              {THEMES.map((t) => (
-                <MenuItem key={t.id} checked={theme === t.id} onSelect={() => onThemeChange(t.id)}>
-                  <Icon name="check" size={16} className="menu-check" />
-                  {t.label}
+              {account && (
+                <MenuItem
+                  onSelect={() => {
+                    void copyAddress()
+                    setTimeout(close, 600)
+                  }}
+                >
+                  <Icon name={copied ? 'check' : 'copy'} size={16} />
+                  {copied ? 'Copied' : 'Copy address'}
                 </MenuItem>
-              ))}
+              )}
             </>
           )}
         </Menu>

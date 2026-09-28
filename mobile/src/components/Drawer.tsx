@@ -11,9 +11,11 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  Alert,
   Animated,
   Easing,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +23,7 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useAuth } from '@/data/auth'
 import { useMail } from '@/data/MailProvider'
 import { useTheme } from '@/theme/ThemeProvider'
 import { font, radius, spacing } from '@/theme/metrics'
@@ -115,6 +118,25 @@ const FOLDERS: { view: MailView; label: string; icon: IconName }[] = [
 export function MenuList({ onNavigate, showInbox = true }: { onNavigate?: () => void; showInbox?: boolean }) {
   const { colors } = useTheme()
   const { mails, labels } = useMail()
+  const { signOut } = useAuth()
+
+  const confirmSignOut = () => {
+    const title = 'Sign out?'
+    const message = 'You can sign back in with a code sent to your number.'
+    const leave = () => {
+      onNavigate?.()
+      void signOut()
+    }
+    // Alert.alert does nothing on react-native-web.
+    if (Platform.OS === 'web') {
+      if (window.confirm(`${title}\n\n${message}`)) leave()
+      return
+    }
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: leave },
+    ])
+  }
   const [labelsOpen, setLabelsOpen] = useState(false)
   const counts = useMemo(() => viewCounts(mails), [mails])
 
@@ -180,6 +202,7 @@ export function MenuList({ onNavigate, showInbox = true }: { onNavigate?: () => 
 
       <DrawerItem icon="settings" label="Settings" onPress={() => go('/settings')} />
       <DrawerItem icon="help" label="Help & Support" onPress={() => go('/help')} />
+      <DrawerItem icon="logout" label="Sign out" onPress={confirmSignOut} />
     </>
   )
 }

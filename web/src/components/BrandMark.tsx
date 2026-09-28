@@ -1,17 +1,7 @@
-/** The PhoneMail "M" tile from the design. */
+// 128px copy of assets/logo.png (the full-size original is ~1 MB).
+import logo from '../assets/logo-128.png'
+
+/** The PhoneMail logo: a phone with an envelope. */
 export function BrandMark({ size = 38 }: { size?: number }) {
-  return (
-    <span className="brand-mark" style={{ width: size, height: size }} aria-hidden>
-      <svg viewBox="0 0 24 24" width={size * 0.62} height={size * 0.62}>
-        <path
-          d="M5 18V6.5l7 6.5 7-6.5V18"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </span>
-  )
+  return <img className="brand-mark" src={logo} width={size} height={size} alt="" />
 }

@@ -1,7 +1,5 @@
 import type { IconName } from '@shared/icons'
-import { formatStorage, type Label, type MailView } from '@shared/mail'
-import { labelColors, type LabelColor } from '@shared/theme'
-import { useState, type FormEvent } from 'react'
+import { formatStorage, type MailView } from '@shared/mail'
 import { BrandMark } from './BrandMark'
 import { Icon } from './Icon'
 
@@ -15,14 +13,10 @@ const NAV: { view: MailView; label: string; icon: IconName }[] = [
   { view: 'trash', label: 'Trash', icon: 'trash' },
 ]
 
-const NEW_LABEL_COLORS = Object.keys(labelColors) as LabelColor[]
-
 interface Props {
   view: MailView
   onViewChange: (view: MailView) => void
   counts: { inbox: number; drafts: number; spam: number }
-  labels: Label[]
-  onCreateLabel: (label: Label) => Promise<unknown>
   storageUsed: number
   storageQuota: number
   onCompose: () => void
@@ -32,33 +26,12 @@ export function Sidebar({
   view,
   onViewChange,
   counts,
-  labels,
-  onCreateLabel,
   storageUsed,
   storageQuota,
   onCompose,
 }: Props) {
-  const [labelsOpen, setLabelsOpen] = useState(true)
-  const [creating, setCreating] = useState(false)
-  const [newName, setNewName] = useState('')
-  const [labelError, setLabelError] = useState<string | null>(null)
-
   const countFor = (v: MailView) =>
     v === 'inbox' ? counts.inbox : v === 'drafts' ? counts.drafts : v === 'spam' ? counts.spam : 0
-
-  const submitLabel = async (e: FormEvent) => {
-    e.preventDefault()
-    const name = newName.trim()
-    if (!name) return
-    try {
-      await onCreateLabel({ name, color: NEW_LABEL_COLORS[labels.length % NEW_LABEL_COLORS.length] })
-      setNewName('')
-      setCreating(false)
-      setLabelError(null)
-    } catch (err) {
-      setLabelError((err as Error).message)
-    }
-  }
 
   const usedPct = storageQuota ? Math.min(100, (storageUsed / storageQuota) * 100) : 0
 
@@ -70,7 +43,7 @@ export function Sidebar({
       </div>
 
       <button className="compose-button" onClick={onCompose}>
-        <Icon name="pencil" size={20} />
+        <Icon name="pencil" size={18} />
         <span>Compose</span>
       </button>
 
@@ -85,7 +58,7 @@ export function Sidebar({
               aria-current={active ? 'page' : undefined}
               onClick={() => onViewChange(item.view)}
             >
-              <Icon name={item.icon} size={20} />
+              <Icon name={item.icon} size={16} />
               <span className="nav-label">{item.label}</span>
               {count > 0 && (
                 <span className={item.view === 'inbox' ? 'nav-badge' : 'nav-count'}>{count}</span>
@@ -94,61 +67,6 @@ export function Sidebar({
           )
         })}
       </nav>
-
-      <div className="labels">
-        <button
-          className="labels-header"
-          onClick={() => setLabelsOpen((o) => !o)}
-          aria-expanded={labelsOpen}
-        >
-          <span>LABELS</span>
-          <Icon name={labelsOpen ? 'chevronUp' : 'chevronDown'} size={18} />
-        </button>
-
-        {labelsOpen && (
-          <>
-            {labels.map((label) => {
-              const v: MailView = `label:${label.name}`
-              return (
-                <button
-                  key={label.name}
-                  className="nav-item label-item"
-                  aria-current={view === v ? 'page' : undefined}
-                  onClick={() => onViewChange(v)}
-                >
-                  <span
-                    className="label-swatch"
-                    style={{ background: labelColors[label.color as LabelColor] ?? label.color }}
-                  />
-                  <span className="nav-label">{label.name}</span>
-                </button>
-              )
-            })}
-
-            {creating ? (
-              <form className="label-form" onSubmit={submitLabel}>
-                <input
-                  autoFocus
-                  value={newName}
-                  maxLength={40}
-                  placeholder="Label name"
-                  onChange={(e) => setNewName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Escape' && setCreating(false)}
-                />
-                <button type="submit" className="icon-button" aria-label="Create label">
-                  <Icon name="check" size={18} />
-                </button>
-                {labelError && <p className="label-error">{labelError}</p>}
-              </form>
-            ) : (
-              <button className="nav-item" onClick={() => setCreating(true)}>
-                <Icon name="plus" size={20} />
-                <span className="nav-label">Create new label</span>
-              </button>
-            )}
-          </>
-        )}
-      </div>
 
       <div className="storage">
         <div className="storage-title">Storage</div>
