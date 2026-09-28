@@ -8,7 +8,6 @@ export interface ComposeDraft {
   subject: string
   body: string
   inReplyTo?: string
-  /** Forwarding: original message whose attachments are re-attached. */
   forwardOf?: Mail
 }
 
@@ -27,7 +26,6 @@ function quote(mail: Mail) {
   return `\n\nOn ${formatFullDate(mail.date)}, ${mail.from} wrote:\n${quoted}`
 }
 
-/** Builds the compose draft for Reply / Reply all / Forward, excluding our own address. */
 export function replyDraft(mail: Mail, mode: ReplyMode, ownAddress?: string): ComposeDraft {
   const me = ownAddress?.toLowerCase()
   if (mode === 'forward') {

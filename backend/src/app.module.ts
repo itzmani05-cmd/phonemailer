@@ -11,7 +11,6 @@ import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
-    // Real env vars (Docker, CI) win over values in backend/.env.
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     PrismaModule,
     AuthModule,

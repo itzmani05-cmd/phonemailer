@@ -1,4 +1,3 @@
-/** Mirrors backend/src/mail/mail.types.ts (GET /mail). */
 export type MailFolder = 'inbox' | 'sent' | 'drafts' | 'archive' | 'spam' | 'trash'
 export type MailCategory = 'primary' | 'social' | 'promotions'
 
@@ -40,7 +39,6 @@ export interface MailChanges {
   snoozedUntil?: string | null
 }
 
-/** @deprecated use MailChanges */
 export type MailFlags = MailChanges
 
 export interface Label {
@@ -50,9 +48,7 @@ export interface Label {
 
 export interface Account {
   name: string
-  /** National number, digits only (also the address local part) */
   phone: string
-  /** e.g. '91'; empty when not configured */
   countryCode: string
   address: string
   storageQuotaBytes: number
@@ -60,20 +56,15 @@ export interface Account {
 
 export interface AuthUser {
   id: string
-  /** E.164, e.g. +919876543210 */
   phone: string | null
-  /** <phone>@<domain> */
   email: string
   name: string | null
 }
 
 export interface OtpRequestResult {
   success: true
-  /** Normalized E.164 number the code was sent to */
   phone: string
-  /** Seconds until the code expires */
   expiresIn: number
-  /** Seconds before another code can be requested */
   resendIn: number
 }
 
@@ -81,9 +72,7 @@ export interface OtpVerifyResult {
   success: true
   accessToken: string
   tokenType: 'Bearer'
-  /** Token lifetime in seconds */
   expiresIn: number
-  /** True the first time this number signs in */
   isNewUser: boolean
   user: AuthUser
   account: Account
@@ -92,7 +81,6 @@ export interface OtpVerifyResult {
 export interface OutgoingAttachment {
   filename: string
   contentType?: string
-  /** base64 */
   content: string
 }
 

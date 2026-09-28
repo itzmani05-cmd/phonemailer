@@ -4,7 +4,6 @@ import type { SVGProps } from 'react'
 interface Props extends Omit<SVGProps<SVGSVGElement>, 'name'> {
   name: IconName
   size?: number
-  /** Fill the outline shapes (e.g. an active star). */
   filled?: boolean
 }
 

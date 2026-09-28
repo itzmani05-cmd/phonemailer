@@ -2,7 +2,6 @@ import Svg, { Path } from 'react-native-svg'
 import { StyleSheet, View } from 'react-native'
 import { useTheme } from '@/theme/ThemeProvider'
 
-/** The PhoneMail app icon from the onboarding design: an "M" with a phone handset. */
 export function BrandLogo({ size = 88 }: { size?: number }) {
   const { colors } = useTheme()
   return (

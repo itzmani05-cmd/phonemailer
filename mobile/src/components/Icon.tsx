@@ -7,12 +7,10 @@ interface Props {
   name: IconName
   color: string
   size?: number
-  /** Fill outline shapes (active star, active tab). */
   filled?: boolean
   strokeWidth?: number
 }
 
-/** Renders the shared icon set (shared/icons.ts) with react-native-svg. */
 export function Icon({ name, color, size = 22, filled = false, strokeWidth = 2 }: Props) {
   return (
     <Svg

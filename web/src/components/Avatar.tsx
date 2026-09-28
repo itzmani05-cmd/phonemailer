@@ -4,7 +4,6 @@ import type { CSSProperties } from 'react'
 interface Props {
   name: string
   size?: number
-  /** Solid brand color instead of the per-sender palette (reader header, user menu). */
   tone?: 'auto' | 'primary' | 'account'
 }
 

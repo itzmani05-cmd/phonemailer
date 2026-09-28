@@ -5,12 +5,6 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 
-/**
- * Sends SMS through the Twilio REST API. Needs TWILIO_ACCOUNT_SID,
- * TWILIO_AUTH_TOKEN and either TWILIO_MESSAGING_SERVICE_SID or
- * TWILIO_FROM_NUMBER. Without them (outside production) the message is
- * written to the log instead, so the OTP flow can be tested locally.
- */
 @Injectable()
 export class SmsService {
   private readonly logger = new Logger(SmsService.name);
@@ -60,7 +54,6 @@ export class SmsService {
         code?: number;
         message?: string;
       };
-      // e.g. 21608: trial accounts can only text verified numbers.
       this.logger.error(`Twilio ${res.status} ${error.code}: ${error.message}`);
       throw new BadGatewayException({
         message: 'Could not send the SMS',

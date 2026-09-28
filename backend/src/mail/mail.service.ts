@@ -3,15 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { parsePhone } from '../auth/phone';
+import type { Prisma } from '../generated/prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 import type { UpdateMailDto } from './dto/update-mail.dto';
-import type {
-  AttachmentMeta,
-  InboundMail,
-  Label,
-  Mail,
-  MailCategory,
-} from './mail.types';
+import type { InboundMail, Label, Mail, MailCategory } from './mail.types';
+import { NewMailSmsService } from './new-mail-sms.service';
 
 const SOCIAL_DOMAINS = [
   'linkedin.com',
@@ -47,165 +44,282 @@ function categorize(
   return listUnsubscribe ? 'promotions' : 'primary';
 }
 
-function sizeOf(
-  text: string,
-  html: string | null,
-  attachments: AttachmentMeta[],
-) {
-  return (
-    Buffer.byteLength(text) +
-    Buffer.byteLength(html ?? '') +
-    attachments.reduce((sum, a) => sum + a.size, 0)
-  );
+export function mailDomain(): string {
+  return (process.env.MAIL_DOMAIN ?? 'phonemail.com').toLowerCase();
 }
 
-export interface OutboundRecord {
-  /** Reuses the PostgreSQL message id so both stores agree */
-  id: string;
-  messageId: string;
-  from: string;
+export function isLocalAddress(address: string): boolean {
+  return address.trim().toLowerCase().endsWith(`@${mailDomain()}`);
+}
+
+export interface FileContent {
+  filename: string | null;
+  contentType: string;
+  content: Buffer;
+}
+
+export interface Delivery {
+  fromHeader: string;
+  envelopeFrom: string | null;
   to: string[];
   cc: string[];
   subject: string;
   text: string;
   html: string | null;
+  messageId: string | null;
   inReplyTo: string | null;
-  attachments: { filename: string; contentType: string; content: Buffer }[];
+  date: Date;
+  category: MailCategory;
+  attachments: FileContent[];
 }
 
-// In-memory store for now; swap for a Postgres repository once the schema exists.
-@Injectable()
-export class MailService {
-  private readonly messages: Mail[] = [];
-  /** Attachment bytes by mail id, kept out of list responses. */
-  private readonly files = new Map<string, Buffer[]>();
-  private readonly labels: Label[] = [...DEFAULT_LABELS];
+export interface DeliveryResult {
+  delivered: string[];
+  rejected: string[];
+}
 
-  store(inbound: InboundMail): Mail {
-    const attachments = inbound.attachments.map(
-      ({ filename, contentType, size }) => ({
-        filename,
-        contentType,
-        size,
-      }),
-    );
-    const mail: Mail = {
-      id: randomUUID(),
-      direction: 'in',
-      folder: 'inbox',
-      category: categorize(inbound.envelope.from, !!inbound.listUnsubscribe),
-      labels: [],
-      read: false,
-      starred: false,
-      snoozedUntil: null,
-      receivedAt: new Date().toISOString(),
-      envelope: inbound.envelope,
-      messageId: inbound.messageId,
-      inReplyTo: inbound.inReplyTo ?? null,
-      subject: inbound.subject,
-      from: inbound.from,
-      to: inbound.to?.length ? inbound.to : inbound.envelope.to,
-      cc: inbound.cc ?? [],
-      date: inbound.date,
-      text: inbound.text,
-      html: inbound.html,
-      attachments,
-      size: sizeOf(inbound.text, inbound.html, attachments),
-    };
-    this.messages.unshift(mail);
-    this.files.set(
-      mail.id,
-      inbound.attachments.map((a) => Buffer.from(a.content ?? '', 'base64')),
-    );
-    return mail;
-  }
+export function sizeOf(
+  text: string | null,
+  html: string | null,
+  attachments: { size: number }[],
+) {
+  return (
+    Buffer.byteLength(text ?? '') +
+    Buffer.byteLength(html ?? '') +
+    attachments.reduce((sum, a) => sum + a.size, 0)
+  );
+}
 
-  /** Keeps a copy of a message sent through POST /email/send (Sent folder). */
-  storeSent(out: OutboundRecord): Mail {
-    const attachments = out.attachments.map((a) => ({
+export function attachmentRows(files: FileContent[]) {
+  return {
+    create: files.map((f, index) => ({
+      index,
+      filename: f.filename,
+      contentType: f.contentType,
+      size: f.content.length,
+      content: new Uint8Array(f.content),
+    })),
+  };
+}
+
+const MAIL_INCLUDE = {
+  owner: { select: { email: true } },
+  recipients: true,
+  attachments: { omit: { content: true }, orderBy: { index: 'asc' } },
+} satisfies Prisma.MessageInclude;
+
+type MailRow = Prisma.MessageGetPayload<{ include: typeof MAIL_INCLUDE }>;
+
+function toMail(row: MailRow): Mail {
+  const of = (type: 'TO' | 'CC') =>
+    row.recipients.filter((r) => r.type === type).map((r) => r.email);
+  return {
+    id: row.id,
+    direction: row.direction,
+    folder: row.folder,
+    category: row.category,
+    labels: row.labels,
+    read: row.read,
+    starred: row.starred,
+    snoozedUntil: row.snoozedUntil?.toISOString() ?? null,
+    receivedAt: row.createdAt.toISOString(),
+    envelope: {
+      from: row.envelopeFrom,
+      to:
+        row.direction === 'in'
+          ? [row.owner.email]
+          : row.recipients.map((r) => r.email),
+    },
+    messageId: row.messageId,
+    inReplyTo: row.inReplyTo,
+    subject: row.subject,
+    from: row.fromHeader,
+    to: of('TO'),
+    cc: of('CC'),
+    date: row.date.toISOString(),
+    text: row.text ?? '',
+    html: row.html,
+    attachments: row.attachments.map((a) => ({
       filename: a.filename,
       contentType: a.contentType,
-      size: a.content.length,
-    }));
-    const now = new Date().toISOString();
-    const mail: Mail = {
-      id: out.id,
-      direction: 'out',
-      folder: 'sent',
-      category: 'primary',
-      labels: [],
-      read: true,
-      starred: false,
-      snoozedUntil: null,
-      receivedAt: now,
-      envelope: { from: null, to: [...out.to, ...out.cc] },
-      messageId: out.messageId,
-      inReplyTo: out.inReplyTo,
-      subject: out.subject,
-      from: out.from,
-      to: out.to,
-      cc: out.cc,
-      date: now,
-      text: out.text,
-      html: out.html,
-      attachments,
-      size: sizeOf(out.text, out.html, attachments),
-    };
-    this.messages.unshift(mail);
-    this.files.set(
-      mail.id,
-      out.attachments.map((a) => a.content),
-    );
-    return mail;
+      size: a.size,
+    })),
+    size: row.size,
+  };
+}
+
+@Injectable()
+export class MailService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly newMailSms: NewMailSmsService,
+  ) {}
+
+  findLocalUser(address: string) {
+    const email = address.trim().toLowerCase();
+    if (!isLocalAddress(email)) return Promise.resolve(null);
+    const phone = parsePhone(email.split('@')[0]);
+    return this.prisma.user.findFirst({
+      where: { OR: [{ email }, ...(phone ? [{ phone: phone.e164 }] : [])] },
+    });
   }
 
-  list(): Mail[] {
-    return this.messages;
+  receive(inbound: InboundMail): Promise<DeliveryResult> {
+    const date = new Date(inbound.date);
+    return this.deliver(inbound.envelope.to, {
+      fromHeader: inbound.from,
+      envelopeFrom: inbound.envelope.from,
+      to: inbound.to?.length ? inbound.to : inbound.envelope.to,
+      cc: inbound.cc ?? [],
+      subject: inbound.subject,
+      text: inbound.text,
+      html: inbound.html,
+      messageId: inbound.messageId,
+      inReplyTo: inbound.inReplyTo ?? null,
+      date: isNaN(date.getTime()) ? new Date() : date,
+      category: categorize(inbound.envelope.from, !!inbound.listUnsubscribe),
+      attachments: inbound.attachments.map((a) => ({
+        filename: a.filename,
+        contentType: a.contentType,
+        content: Buffer.from(a.content ?? '', 'base64'),
+      })),
+    });
   }
 
-  get(id: string): Mail {
-    const mail = this.messages.find((m) => m.id === id);
-    if (!mail) throw new NotFoundException();
-    return mail;
-  }
+  async deliver(recipients: string[], mail: Delivery): Promise<DeliveryResult> {
+    const result: DeliveryResult = { delivered: [], rejected: [] };
+    const owners = new Set<string>();
+    for (const address of new Set(recipients.map((r) => r.toLowerCase()))) {
+      const user = await this.findLocalUser(address);
+      if (!user) {
+        result.rejected.push(address);
+        continue;
+      }
+      result.delivered.push(address);
+      if (owners.has(user.id)) continue;
+      owners.add(user.id);
 
-  update(id: string, changes: UpdateMailDto): Mail {
-    const mail = this.get(id);
-    if (changes.read !== undefined) mail.read = changes.read;
-    if (changes.starred !== undefined) mail.starred = changes.starred;
-    if (changes.folder !== undefined) mail.folder = changes.folder;
-    if (changes.labels !== undefined)
-      mail.labels = [...new Set(changes.labels)];
-    if (changes.snoozedUntil !== undefined)
-      mail.snoozedUntil = changes.snoozedUntil;
-    return mail;
-  }
-
-  remove(id: string): void {
-    const index = this.messages.findIndex((m) => m.id === id);
-    if (index === -1) throw new NotFoundException();
-    this.messages.splice(index, 1);
-    this.files.delete(id);
-  }
-
-  attachment(id: string, index: number) {
-    const meta = this.get(id).attachments[index];
-    const content = this.files.get(id)?.[index];
-    if (!meta || !content) throw new NotFoundException();
-    return { meta, content };
-  }
-
-  listLabels(): Label[] {
-    return this.labels;
-  }
-
-  createLabel(label: Label): Label {
-    if (
-      this.labels.some((l) => l.name.toLowerCase() === label.name.toLowerCase())
-    ) {
-      throw new ConflictException('Label already exists');
+      if (mail.messageId) {
+        const exists = await this.prisma.message.count({
+          where: {
+            ownerId: user.id,
+            messageId: mail.messageId,
+            direction: 'in',
+          },
+        });
+        if (exists) continue;
+      }
+      await this.prisma.message.create({
+        data: {
+          ownerId: user.id,
+          direction: 'in',
+          folder: 'inbox',
+          category: mail.category,
+          fromHeader: mail.fromHeader,
+          envelopeFrom: mail.envelopeFrom,
+          subject: mail.subject,
+          text: mail.text,
+          html: mail.html,
+          messageId: mail.messageId,
+          inReplyTo: mail.inReplyTo,
+          date: mail.date,
+          size: sizeOf(
+            mail.text,
+            mail.html,
+            mail.attachments.map((a) => ({ size: a.content.length })),
+          ),
+          recipients: {
+            create: [
+              ...mail.to.map((email) => ({ email, type: 'TO' as const })),
+              ...mail.cc.map((email) => ({ email, type: 'CC' as const })),
+            ],
+          },
+          attachments: attachmentRows(mail.attachments),
+        },
+      });
+      this.newMailSms.notify(user, mail);
     }
-    this.labels.push(label);
-    return label;
+    return result;
+  }
+
+  async list(ownerId: string): Promise<Mail[]> {
+    const rows = await this.prisma.message.findMany({
+      where: { ownerId },
+      orderBy: { createdAt: 'desc' },
+      include: MAIL_INCLUDE,
+    });
+    return rows.map(toMail);
+  }
+
+  async get(ownerId: string, id: string): Promise<Mail> {
+    const row = await this.prisma.message.findFirst({
+      where: { id, ownerId },
+      include: MAIL_INCLUDE,
+    });
+    if (!row) throw new NotFoundException();
+    return toMail(row);
+  }
+
+  async update(
+    ownerId: string,
+    id: string,
+    changes: UpdateMailDto,
+  ): Promise<Mail> {
+    const { count } = await this.prisma.message.updateMany({
+      where: { id, ownerId },
+      data: {
+        read: changes.read,
+        starred: changes.starred,
+        folder: changes.folder,
+        labels: changes.labels && [...new Set(changes.labels)],
+        snoozedUntil:
+          changes.snoozedUntil === undefined
+            ? undefined
+            : changes.snoozedUntil && new Date(changes.snoozedUntil),
+      },
+    });
+    if (!count) throw new NotFoundException();
+    return this.get(ownerId, id);
+  }
+
+  async remove(ownerId: string, id: string): Promise<void> {
+    const { count } = await this.prisma.message.deleteMany({
+      where: { id, ownerId },
+    });
+    if (!count) throw new NotFoundException();
+  }
+
+  async attachment(ownerId: string, id: string, index: number) {
+    const file = await this.prisma.attachment.findFirst({
+      where: { messageId: id, index, message: { ownerId } },
+    });
+    if (!file?.content) throw new NotFoundException();
+    return { meta: file, content: Buffer.from(file.content) };
+  }
+
+  async listLabels(ownerId: string): Promise<Label[]> {
+    const select = { name: true, color: true };
+    const labels = await this.prisma.label.findMany({
+      where: { ownerId },
+      select,
+    });
+    if (labels.length) return labels;
+    await this.prisma.label.createMany({
+      data: DEFAULT_LABELS.map((l) => ({ ...l, ownerId })),
+      skipDuplicates: true,
+    });
+    return this.prisma.label.findMany({ where: { ownerId }, select });
+  }
+
+  async createLabel(ownerId: string, label: Label): Promise<Label> {
+    await this.listLabels(ownerId);
+    const clash = await this.prisma.label.count({
+      where: { ownerId, name: { equals: label.name, mode: 'insensitive' } },
+    });
+    if (clash) throw new ConflictException('Label already exists');
+    const { name, color } = await this.prisma.label.create({
+      data: { ownerId, name: label.name, color: label.color },
+    });
+    return { name, color };
   }
 }

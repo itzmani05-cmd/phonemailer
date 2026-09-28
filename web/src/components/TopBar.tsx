@@ -53,7 +53,6 @@ export function TopBar({
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {
-      // clipboard blocked; nothing else to do
     }
   }
 
@@ -87,7 +86,6 @@ export function TopBar({
           </button>
         )}
 
-        {/* notification */}
         <Menu
           align="right"
           trigger={({ toggle }) => (

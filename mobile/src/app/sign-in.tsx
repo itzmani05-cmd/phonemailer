@@ -18,10 +18,8 @@ import { MAIL_DOMAIN } from '@/data/config'
 import { useTheme } from '@/theme/ThemeProvider'
 import { font, radius, spacing } from '@/theme/metrics'
 
-/** Only India is supported for now (the backend validates the same way). */
 const COUNTRY = { flag: '🇮🇳', dialCode: '+91' }
 
-/** Digits of the national number: drops a pasted +91 / leading 0, max 10. */
 function nationalDigits(input: string): string {
   let digits = input.replace(/\D/g, '')
   if (digits.length > 10 && digits.startsWith('91')) digits = digits.slice(2)
@@ -31,7 +29,6 @@ function nationalDigits(input: string): string {
 
 const isValidMobile = (digits: string) => /^[6-9]\d{9}$/.test(digits)
 
-/** "98765 43210" */
 const grouped = (digits: string) =>
   digits.length > 5 ? `${digits.slice(0, 5)} ${digits.slice(5)}` : digits
 
@@ -60,7 +57,6 @@ export default function SignInScreen() {
       router.push({ pathname: '/verify', params: { phone: digits, resendIn: String(res.resendIn) } })
     } catch (err) {
       if (err instanceof ApiError && err.status === 429 && err.retryAfter) {
-        // A code was sent moments ago: go enter it instead of blocking.
         router.push({ pathname: '/verify', params: { phone: digits, resendIn: String(err.retryAfter) } })
       } else {
         setError(err instanceof ApiError ? err.message : 'Can’t reach PhoneMail. Check your connection.')

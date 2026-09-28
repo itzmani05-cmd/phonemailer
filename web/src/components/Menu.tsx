@@ -7,7 +7,6 @@ interface Props {
   className?: string
 }
 
-/** Minimal dropdown: closes on outside click and Escape. */
 export function Menu({ trigger, children, align = 'left', className = '' }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)

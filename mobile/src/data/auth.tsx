@@ -16,7 +16,6 @@ import { setApiToken } from './api'
 const TOKEN_KEY = 'phonemail.token'
 const USER_KEY = 'phonemail.user'
 
-// The token lives in the Keychain / Keystore; SecureStore has no web implementation.
 const storage =
   Platform.OS === 'web'
     ? {
@@ -31,7 +30,6 @@ const storage =
       }
 
 interface AuthContextValue {
-  /** 'loading' until the stored session has been read */
   status: 'loading' | 'signedOut' | 'signedIn'
   token: string | null
   user: AuthUser | null

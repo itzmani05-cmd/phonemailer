@@ -48,7 +48,6 @@ export function useMailbox() {
     [updateMany],
   )
 
-  /** Permanent delete (used from Trash). */
   const removeMany = useCallback(
     async (ids: string[]) => {
       const set = new Set(ids)

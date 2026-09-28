@@ -27,7 +27,6 @@ export class UpdateMailDto {
   @IsOptional()
   labels?: string[];
 
-  /** ISO timestamp to snooze until, or null to unsnooze. */
   @IsISO8601()
   @ValidateIf((_, v) => v !== null && v !== undefined)
   snoozedUntil?: string | null;

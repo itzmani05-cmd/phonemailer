@@ -23,7 +23,6 @@ export class PrismaService
   }
 
   async onModuleInit() {
-    // Like SMTP: report a bad connection at boot, but don't block startup.
     try {
       await this.$connect();
       this.logger.log('Database connection OK');

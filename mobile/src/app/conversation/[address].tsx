@@ -103,7 +103,6 @@ export default function ConversationScreen() {
     [mails, address],
   )
 
-  // Opening the chat marks received messages as read.
   const unreadIds = conversation?.messages.filter((m) => m.direction === 'in' && !m.read).map((m) => m.id)
   const unreadKey = unreadIds?.join(',')
   useEffect(() => {
@@ -140,7 +139,6 @@ export default function ConversationScreen() {
     }
   }
 
-  // Day separators between messages.
   const items: ({ kind: 'day'; label: string } | { kind: 'mail'; mail: Mail })[] = []
   let lastDay = ''
   for (const m of conversation?.messages ?? []) {

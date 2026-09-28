@@ -4,14 +4,23 @@ import { simpleParser } from 'mailparser';
 const SMTP_PORT = Number(process.env.SMTP_PORT ?? 2525);
 const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:3000';
 const INBOUND_SECRET = process.env.INBOUND_SECRET ?? '';
+const MAIL_DOMAIN = (process.env.MAIL_DOMAIN ?? 'phonemail.com').toLowerCase();
 const MAX_SIZE = Number(process.env.MAX_MESSAGE_BYTES ?? 25 * 1024 * 1024);
 
 const server = new SMTPServer({
-  // Receive-only MX: no auth, accept mail from anyone for our domains.
   authOptional: true,
   disabledCommands: ['AUTH'],
   size: MAX_SIZE,
   logger: false,
+
+  onRcptTo(address, _session, callback) {
+    if (!address.address.toLowerCase().endsWith(`@${MAIL_DOMAIN}`)) {
+      return callback(
+        Object.assign(new Error('Relay access denied'), { responseCode: 550 }),
+      );
+    }
+    callback();
+  },
 
   async onData(stream, session, callback) {
     try {
@@ -40,8 +49,6 @@ const server = new SMTPServer({
         date: parsed.date?.toISOString() ?? new Date().toISOString(),
         text: parsed.text ?? '',
         html: parsed.html || null,
-        // Bulk/marketing senders set this; the backend uses it for the Promotions tab.
-        // mailparser groups List-* headers under 'list' ({ unsubscribe: … }).
         listUnsubscribe: !!(parsed.headers.get('list') as { unsubscribe?: unknown } | undefined)
           ?.unsubscribe,
         attachments: parsed.attachments.map((a) => ({
@@ -57,13 +64,17 @@ const server = new SMTPServer({
         headers: { 'content-type': 'application/json', 'x-inbound-secret': INBOUND_SECRET },
         body: JSON.stringify(payload),
       });
+      if (res.status === 404) {
+        console.log(`No mailbox for ${payload.envelope.to.join(', ')}`);
+        return callback(Object.assign(new Error('No such user here'), { responseCode: 550 }));
+      }
       if (!res.ok) throw new Error(`Backend responded ${res.status}`);
 
-      console.log(`Delivered ${payload.messageId} -> ${payload.envelope.to.join(', ')}`);
+      const { delivered } = (await res.json()) as { delivered: string[] };
+      console.log(`Delivered ${payload.messageId} -> ${delivered.join(', ')}`);
       callback();
     } catch (err) {
       console.error('Failed to process message:', err);
-      // 451 = temporary failure, so the sending MTA will retry later.
       callback(Object.assign(new Error('Temporary processing failure'), { responseCode: 451 }));
     }
   },

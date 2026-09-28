@@ -10,12 +10,11 @@ import { Text } from './Text'
 const TABS: Record<string, { label: string; icon: IconName }> = {
   index: { label: 'Chats', icon: 'chatLines' },
   contacts: { label: 'Contacts', icon: 'users' },
-  compose: { label: 'Compose', icon: 'plus' },
+  'compose-tab': { label: 'Compose', icon: 'plus' },
   attachments: { label: 'Attachments', icon: 'fileText' },
   more: { label: 'More', icon: 'moreCircle' },
 }
 
-/** Bottom bar from the design: four tabs plus a raised Compose button in the middle. */
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
@@ -36,7 +35,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
         if (!tab) return null
         const focused = state.index === index
 
-        if (route.name === 'compose') {
+        if (route.name === 'compose-tab') {
           return (
             <Pressable
               key={route.key}

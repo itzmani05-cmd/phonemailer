@@ -26,7 +26,7 @@ interface Props {
   showTabs: boolean
   category: MailCategory
   onCategoryChange: (c: MailCategory) => void
-  mails: Mail[] // current page
+  mails: Mail[]
   total: number
   page: number
   onPageChange: (page: number) => void

@@ -9,7 +9,6 @@ import { Text } from './Text'
 export interface SheetOption {
   label: string
   icon?: IconName
-  /** Custom leading element (e.g. a colored brand glyph). */
   leading?: ReactNode
   danger?: boolean
   checked?: boolean
@@ -23,7 +22,6 @@ interface Props {
   onClose: () => void
 }
 
-/** "Add attachment"-style action sheet from the design (screen 8). */
 export function BottomSheet({ visible, title, options, onClose }: Props) {
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()

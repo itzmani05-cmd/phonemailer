@@ -16,7 +16,6 @@ export interface AttachmentMeta {
   size: number;
 }
 
-/** Payload POSTed by the mail-server for every received message. */
 export interface InboundMail {
   envelope: { from: string | null; to: string[] };
   messageId: string | null;
@@ -34,14 +33,12 @@ export interface InboundMail {
 
 export interface Mail {
   id: string;
-  /** 'in' = received, 'out' = sent from this mailbox */
   direction: 'in' | 'out';
   folder: MailFolder;
   category: MailCategory;
   labels: string[];
   read: boolean;
   starred: boolean;
-  /** ISO time; hidden from the inbox (shown under Snoozed) until then */
   snoozedUntil: string | null;
   receivedAt: string;
   envelope: { from: string | null; to: string[] };
@@ -55,7 +52,6 @@ export interface Mail {
   text: string;
   html: string | null;
   attachments: AttachmentMeta[];
-  /** Approximate bytes used, for the storage meter */
   size: number;
 }
 

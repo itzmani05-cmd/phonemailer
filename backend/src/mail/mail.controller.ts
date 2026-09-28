@@ -5,14 +5,18 @@ import {
   Get,
   Headers,
   HttpCode,
+  NotFoundException,
   Param,
   ParseIntPipe,
   Patch,
   Post,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { CurrentUser, MailboxGuard } from '../auth/auth.guards';
+import type { AuthUser } from '../auth/auth.service';
 import { CreateLabelDto } from './dto/create-label.dto';
 import { UpdateMailDto } from './dto/update-mail.dto';
 import { MailService } from './mail.service';
@@ -22,10 +26,9 @@ import type { InboundMail } from './mail.types';
 export class MailController {
   constructor(private readonly mailService: MailService) {}
 
-  /** Called by the mail-server service for every received message. */
   @Post('mail/inbound')
   @HttpCode(202)
-  inbound(
+  async inbound(
     @Headers('x-inbound-secret') secret: string | undefined,
     @Body() mail: InboundMail,
   ) {
@@ -33,51 +36,72 @@ export class MailController {
     if (expected && secret !== expected) {
       throw new UnauthorizedException();
     }
-    const stored = this.mailService.store(mail);
-    return { accepted: true, id: stored.id };
+    const result = await this.mailService.receive(mail);
+    if (!result.delivered.length) {
+      throw new NotFoundException({
+        message: 'No such mailbox',
+        rejected: result.rejected,
+      });
+    }
+    return { accepted: true, ...result };
   }
 
   @Get('mail')
-  list() {
-    return this.mailService.list();
+  @UseGuards(MailboxGuard)
+  list(@CurrentUser() user: AuthUser) {
+    return this.mailService.list(user.id);
   }
 
   @Get('mail/:id')
-  get(@Param('id') id: string) {
-    return this.mailService.get(id);
+  @UseGuards(MailboxGuard)
+  get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.mailService.get(user.id, id);
   }
 
   @Patch('mail/:id')
-  update(@Param('id') id: string, @Body() changes: UpdateMailDto) {
-    return this.mailService.update(id, changes);
+  @UseGuards(MailboxGuard)
+  update(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() changes: UpdateMailDto,
+  ) {
+    return this.mailService.update(user.id, id, changes);
   }
 
-  /** Permanent delete (the apps move mail to Trash first via PATCH). */
   @Delete('mail/:id')
+  @UseGuards(MailboxGuard)
   @HttpCode(204)
-  remove(@Param('id') id: string) {
-    this.mailService.remove(id);
+  remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.mailService.remove(user.id, id);
   }
 
   @Get('mail/:id/attachments/:index')
-  attachment(
+  @UseGuards(MailboxGuard)
+  async attachment(
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Param('index', ParseIntPipe) index: number,
     @Res() res: Response,
   ) {
-    const { meta, content } = this.mailService.attachment(id, index);
+    const { meta, content } = await this.mailService.attachment(
+      user.id,
+      id,
+      index,
+    );
     res.attachment(meta.filename ?? `attachment-${index + 1}`);
     res.type(meta.contentType);
     res.send(content);
   }
 
   @Get('labels')
-  labels() {
-    return this.mailService.listLabels();
+  @UseGuards(MailboxGuard)
+  labels(@CurrentUser() user: AuthUser) {
+    return this.mailService.listLabels(user.id);
   }
 
   @Post('labels')
-  createLabel(@Body() label: CreateLabelDto) {
-    return this.mailService.createLabel(label);
+  @UseGuards(MailboxGuard)
+  createLabel(@CurrentUser() user: AuthUser, @Body() label: CreateLabelDto) {
+    return this.mailService.createLabel(user.id, label);
   }
 }

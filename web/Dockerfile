@@ -1,4 +1,3 @@
-# Build context is the repo root so shared/ (theme tokens) is available.
 FROM node:22-alpine AS build
 WORKDIR /repo
 COPY shared ./shared

@@ -1,13 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 
-/*
- * Layout follows data/webui.jpeg. Colors (var(--color-*)) and the font stack
- * (var(--font-sans)) are generated from shared/theme by src/theme/cssVars.ts.
- * Do not add hex/rgb literals here.
- */
-
 :root {
-  /* Scales every font size in this file; 1 = original design. */
   --font-scale: 0.9;
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -77,8 +70,6 @@ p {
   margin: 0;
 }
 
-/* ---------- Shell ---------- */
-
 .app {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
@@ -116,8 +107,6 @@ p {
 .scrim {
   display: none;
 }
-
-/* ---------- Shared controls ---------- */
 
 .icon-button {
   display: inline-grid;
@@ -232,8 +221,6 @@ p {
   font-size: calc(13px * var(--font-scale));
 }
 
-/* ---------- Menus ---------- */
-
 .menu {
   position: relative;
   display: inline-flex;
@@ -333,8 +320,6 @@ p {
   color: var(--color-text-muted);
   font-size: calc(13px * var(--font-scale));
 }
-
-/* ---------- Sidebar ---------- */
 
 .sidebar {
   display: flex;
@@ -541,8 +526,6 @@ p {
   background: var(--color-primary);
 }
 
-/* ---------- Top bar ---------- */
-
 .topbar {
   display: flex;
   align-items: center;
@@ -694,8 +677,6 @@ p {
 .menu-item-end {
   margin-left: auto;
 }
-
-/* ---------- Message list ---------- */
 
 .tabs {
   display: flex;
@@ -895,8 +876,6 @@ p {
   font-size: calc(13.5px * var(--font-scale));
 }
 
-/* ---------- Reader ---------- */
-
 .reader-empty {
   align-items: center;
   justify-content: center;
@@ -1022,7 +1001,6 @@ p {
 }
 
 .email-canvas {
-  /* Padding for dark mode; the negative margin keeps text aligned in light mode. */
   margin: 0 -16px;
   padding: 16px;
   border-radius: var(--radius-md);
@@ -1130,8 +1108,6 @@ p {
 .pill-button:hover {
   background: var(--color-surface-hover);
 }
-
-/* ---------- Compose ---------- */
 
 .compose {
   position: fixed;
@@ -1322,8 +1298,6 @@ p {
   background: var(--color-primary-hover);
 }
 
-/* ---------- Responsive ---------- */
-
 @media (max-width: 1380px) {
   .app {
     --list-width: 440px;
@@ -1334,7 +1308,6 @@ p {
   }
 }
 
-/* Tablet: one content pane at a time, sidebar becomes a drawer */
 @media (max-width: 1100px) {
   .app {
     grid-template-columns: minmax(0, 1fr);

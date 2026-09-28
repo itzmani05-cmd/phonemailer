@@ -1,8 +1,3 @@
-/**
- * Icon shapes shared by web (<svg>) and mobile (react-native-svg), drawn on a
- * 24x24 grid with round 2px strokes (Lucide-style). Each platform has a tiny
- * <Icon name=… /> renderer that maps these nodes to its SVG elements.
- */
 export type IconNode =
   | { t: 'path'; d: string; fill?: boolean }
   | { t: 'circle'; cx: number; cy: number; r: number; fill?: boolean }
@@ -126,6 +121,21 @@ export const icons = {
   copy: [r(8, 8, 14, 14), p('M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2')],
   restore: [p('M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'), p('M3 3v5h5')],
   logout: [p('M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'), p('m16 17 5-5-5-5'), p('M21 12H9')],
+  share: [c(18, 5, 3), c(6, 12, 3), c(18, 19, 3), p('m8.59 13.51 6.83 3.98'), p('m15.41 6.51-6.82 3.98')],
+  qrCode: [
+    r(3, 3, 5, 5, 1),
+    r(16, 3, 5, 5, 1),
+    r(3, 16, 5, 5, 1),
+    p('M21 16h-3a2 2 0 0 0-2 2v3'),
+    p('M21 21v.01'),
+    p('M12 7v3a2 2 0 0 1-2 2H7'),
+    p('M3 12h.01'),
+    p('M12 3h.01'),
+    p('M12 16v.01'),
+    p('M16 12h1'),
+    p('M21 12v.01'),
+    p('M12 21v-1'),
+  ],
 } satisfies Record<string, IconNode[]>
 
 export type IconName = keyof typeof icons

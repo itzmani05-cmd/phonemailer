@@ -1,4 +1,3 @@
-/** `"Alice Smith" <alice@x.com>` -> `Alice Smith`; bare address -> address. */
 export function senderName(from: string): string {
   const match = from.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>/)
   if (match) return match[1].trim() || match[2]
@@ -48,7 +47,6 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-/** List preview: plain text, or the HTML body with tags stripped for HTML-only mail. */
 export function previewText(mail: { text: string; html: string | null }, max = 120): string {
   if (mail.text.trim()) return snippet(mail.text, max)
   const stripped = (mail.html ?? '')
@@ -67,7 +65,6 @@ function isYesterday(date: Date, now = new Date()) {
   return new Date(now.getTime() - DAY).toDateString() === date.toDateString()
 }
 
-/** Mobile lists: "10:24 AM" today, "Yesterday", "Jan 20" this year, else with the year. */
 export function formatShortDate(iso: string): string {
   const date = new Date(iso)
   if (isYesterday(date)) return 'Yesterday'
@@ -78,7 +75,6 @@ export function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
-/** "10:24 AM (2 hours ago)" for today, otherwise "Nov 28, 10:24 AM (3 days ago)". */
 export function formatWithAgo(iso: string, now = Date.now()): string {
   const date = new Date(iso)
   const mins = Math.max(0, Math.round((now - date.getTime()) / 60000))
@@ -97,7 +93,6 @@ export function formatWithAgo(iso: string, now = Date.now()): string {
   return `${when} (${ago})`
 }
 
-/** "Yesterday, 8:01 AM" / "Jan 20, 2026, 8:01 AM" (mobile email details). */
 export function formatDetailDate(iso: string): string {
   const date = new Date(iso)
   const now = new Date()
@@ -112,7 +107,6 @@ export function formatDetailDate(iso: string): string {
   })
 }
 
-/** Chat day separators: "Today", "Yesterday", "Mon, Jan 20". */
 export function formatDay(iso: string): string {
   const date = new Date(iso)
   const now = new Date()
@@ -126,14 +120,12 @@ export function formatDay(iso: string): string {
   })
 }
 
-/** "+91 98765 43210" for a 10-digit number with country code. */
 export function formatPhone(phone: string, countryCode = ''): string {
   const digits = phone.replace(/\D/g, '')
   const grouped = digits.length === 10 ? `${digits.slice(0, 5)} ${digits.slice(5)}` : digits
   return countryCode ? `+${countryCode} ${grouped}` : grouped
 }
 
-/** "2.4 GB of 15 GB used" */
 export function formatStorage(used: number, quota: number): string {
   const gb = (n: number) => {
     const v = n / 1024 ** 3
@@ -143,7 +135,6 @@ export function formatStorage(used: number, quota: number): string {
   return `${usedLabel} of ${gb(quota)} used`
 }
 
-/** Chat bubbles: drop the quoted history ("On … wrote:" and "> " lines) from replies. */
 export function stripQuoted(text: string): string {
   const lines = text.replace(/\r\n/g, '\n').split('\n')
   const cut = lines.findIndex(

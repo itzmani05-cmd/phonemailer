@@ -9,7 +9,6 @@ import { SmsService } from '../src/auth/sms.service';
 import { TwilioVerifyService } from '../src/auth/verify.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
-/** Captures texts instead of calling Twilio. */
 class FakeSms {
   sent: { to: string; body: string }[] = [];
   fail = false;
@@ -27,7 +26,6 @@ class FakeSms {
   }
 }
 
-/** Stands in for Twilio Verify, which holds the code itself. Off by default. */
 class FakeVerify {
   configured = false;
   fail = false;
@@ -48,7 +46,6 @@ class FakeVerify {
   }
 }
 
-/** Typed view of a JSON response body. */
 type Body = {
   message?: string;
   retryAfter?: number;
@@ -76,7 +73,6 @@ describe('Phone sign-in (e2e)', () => {
   const verifyOtp = (code: string, phone = PHONE) =>
     api().post('/auth/otp/verify').send({ phone, code });
 
-  /** Requests a code and signs in; returns the verify response body. */
   async function signIn(phone = PHONE) {
     await requestOtp(phone).expect(200);
     const e164 = `+91${phone}`;
@@ -334,6 +330,43 @@ describe('Phone sign-in (e2e)', () => {
     });
   });
 
+  describe('mobile app flag (decides new-mail SMS)', () => {
+    const mobileAppAt = async () =>
+      (await prisma.user.findFirstOrThrow({ where: { phone: E164 } }))
+        .mobileAppAt;
+
+    it('is set when signing in from the mobile app', async () => {
+      await requestOtp().expect(200);
+      await api()
+        .post('/auth/otp/verify')
+        .set('x-phonemail-client', 'mobile')
+        .send({ phone: PHONE, code: sms.lastCode(E164) })
+        .expect(200);
+      expect(await mobileAppAt()).toBeInstanceOf(Date);
+    });
+
+    it('is not set for web sign-ins', async () => {
+      await requestOtp().expect(200);
+      await api()
+        .post('/auth/otp/verify')
+        .set('x-phonemail-client', 'web')
+        .send({ phone: PHONE, code: sms.lastCode(E164) })
+        .expect(200);
+      expect(await mobileAppAt()).toBeNull();
+    });
+
+    it('is set when the app loads an existing session', async () => {
+      const { accessToken } = await signIn();
+      expect(await mobileAppAt()).toBeNull();
+      await api()
+        .get('/auth/me')
+        .set('authorization', `Bearer ${accessToken}`)
+        .set('x-phonemail-client', 'mobile')
+        .expect(200);
+      expect(await mobileAppAt()).toBeInstanceOf(Date);
+    });
+  });
+
   describe('tokens', () => {
     it('GET /auth/me returns the signed-in user', async () => {
       const { accessToken, user } = await signIn();
@@ -388,7 +421,6 @@ describe('Phone sign-in (e2e)', () => {
   describe('sending as the signed-in user', () => {
     it('saves the send under the user with their address as From', async () => {
       const { accessToken, user } = await signIn();
-      // SMTP points at a closed port, so the relay step fails (502) after saving.
       await api()
         .post('/email/send')
         .set('authorization', `Bearer ${accessToken}`)
@@ -397,7 +429,9 @@ describe('Phone sign-in (e2e)', () => {
       const msg = await prisma.message.findFirstOrThrow({
         include: { recipients: true },
       });
-      expect(msg.senderId).toBe(user.id);
+      expect(msg.ownerId).toBe(user.id);
+      expect(msg.direction).toBe('out');
+      expect(msg.folder).toBe('sent');
       expect(msg.fromHeader).toBe('9876543210@phonemail.com');
       expect(msg.status).toBe('FAILED');
       expect(msg.recipients).toEqual([
@@ -434,7 +468,7 @@ describe('Phone sign-in (e2e)', () => {
       );
 
       const theirs = await prisma.message.findFirstOrThrow({
-        where: { senderId: other.user.id },
+        where: { ownerId: other.user.id },
       });
       await api()
         .get(`/messages/${theirs.id}`)

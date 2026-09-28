@@ -50,7 +50,6 @@ export default function VerifyScreen() {
     try {
       const result = await api.verifyOtp(phone, value)
       await completeOnboarding()
-      // Flips the root layout's guard to the signed-in screens.
       await signIn(result)
     } catch (err) {
       setError(errorMessage(err))
@@ -65,7 +64,6 @@ export default function VerifyScreen() {
     const digits = text.replace(/\D/g, '').slice(0, CODE_LENGTH)
     setCode(digits)
     setError(null)
-    // Autofilled or typed: submit as soon as the code is complete.
     if (digits.length === CODE_LENGTH && !busy) void verify(digits)
   }
 
@@ -102,7 +100,6 @@ export default function VerifyScreen() {
             <Text style={[styles.link, { color: colors.primary }]}>Wrong number?</Text>
           </Pressable>
 
-          {/* One real input (so SMS autofill and paste work) drawn as separate boxes. */}
           <Pressable style={styles.boxes} onPress={() => input.current?.focus()} accessible={false}>
             {Array.from({ length: CODE_LENGTH }, (_, i) => {
               const active = i === code.length && !busy
@@ -132,7 +129,6 @@ export default function VerifyScreen() {
               editable={!busy}
               autoFocus
               keyboardType="number-pad"
-              // iOS offers the code from Messages; Android's autofill service offers it from SMS.
               textContentType="oneTimeCode"
               autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
               importantForAutofill="yes"
@@ -189,7 +185,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   digit: { fontSize: 24, fontWeight: '600' },
-  // Covers the boxes so taps, long-press paste and autofill reach the input.
   hiddenInput: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.02, color: 'transparent' },
   status: { minHeight: 44, justifyContent: 'center', marginTop: spacing.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

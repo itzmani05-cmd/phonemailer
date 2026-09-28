@@ -9,7 +9,6 @@ export function readStoredTheme(): ThemePreference {
     const value = localStorage.getItem(STORAGE_KEY)
     if (value === 'light' || value === 'dark') return value
   } catch {
-    // storage unavailable (private mode etc.)
   }
   return 'system'
 }
@@ -28,7 +27,6 @@ export function useThemePreference() {
     try {
       localStorage.setItem(STORAGE_KEY, preference)
     } catch {
-      // ignore
     }
   }, [preference])
 

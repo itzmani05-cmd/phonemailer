@@ -6,7 +6,6 @@ import { Text } from './Text'
 interface Props {
   name: string
   size?: number
-  /** 'primary' = brand-colored (account, email details); default hashes the name. */
   tone?: 'auto' | 'primary'
 }
 

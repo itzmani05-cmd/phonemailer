@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   Post,
   UseGuards,
@@ -14,23 +15,28 @@ import { RequestOtpDto, VerifyOtpDto } from './dto/otp.dto';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
-  /** Texts a 6-digit code to the number. */
   @Post('otp/request')
   @HttpCode(200)
   requestOtp(@Body() dto: RequestOtpDto) {
     return this.auth.requestOtp(dto);
   }
 
-  /** Checks the code, then signs in (or creates) the account for the number. */
   @Post('otp/verify')
   @HttpCode(200)
-  verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.auth.verifyOtp(dto);
+  verifyOtp(
+    @Body() dto: VerifyOtpDto,
+    @Headers('x-phonemail-client') client?: string,
+  ) {
+    return this.auth.verifyOtp(dto, client);
   }
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  me(@CurrentUser() user: AuthUser) {
+  async me(
+    @CurrentUser() user: AuthUser,
+    @Headers('x-phonemail-client') client?: string,
+  ) {
+    if (client === 'mobile') await this.auth.markMobileApp(user.id);
     return { user, account: toAccount(user) };
   }
 }

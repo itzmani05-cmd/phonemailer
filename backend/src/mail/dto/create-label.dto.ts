@@ -1,6 +1,5 @@
 import { IsIn, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 
-/** Named color slots; each app maps them to its theme (see shared/theme). */
 export const LABEL_COLORS = [
   'green',
   'yellow',

@@ -4,7 +4,6 @@ import { defineConfig } from 'vite'
 
 const sharedDir = fileURLToPath(new URL('../shared', import.meta.url))
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   resolve: {

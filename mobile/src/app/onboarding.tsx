@@ -42,7 +42,6 @@ export default function OnboardingScreen() {
   const { colors } = useTheme()
   const { width } = useWindowDimensions()
   const [page, setPage] = useState(0)
-  // Horizontal list items don't stretch vertically, so size pages to the list.
   const [height, setHeight] = useState(0)
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) =>

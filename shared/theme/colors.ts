@@ -1,10 +1,3 @@
-/**
- * Single source of truth for PhoneMail colors, shared by web and mobile.
- * Values are sampled from the designs in data/webui.jpeg and data/mobileui.jpeg.
- * Components must use the semantic tokens (`lightColors` / `darkColors`),
- * never raw palette values or hex literals.
- */
-
 export const palette = {
   white: '#ffffff',
   black: '#000000',
@@ -44,17 +37,11 @@ export const palette = {
 } as const;
 
 export interface ThemeColors {
-  /** App background behind all panels */
   background: string;
-  /** Cards, panels, list rows */
   surface: string;
-  /** Sidebar and secondary panels */
   surfaceMuted: string;
-  /** Search fields, pills, inactive chips */
   surfaceSunken: string;
-  /** Row hover */
   surfaceHover: string;
-  /** Selected row / active nav item */
   surfaceSelected: string;
   border: string;
   borderStrong: string;
@@ -65,9 +52,7 @@ export interface ThemeColors {
 
   primary: string;
   primaryHover: string;
-  /** Text/icons drawn on top of `primary` */
   onPrimary: string;
-  /** Badges and soft primary fills */
   primarySoft: string;
 
   star: string;
@@ -76,18 +61,14 @@ export interface ThemeColors {
   dangerSoft: string;
   unread: string;
   focusRing: string;
-  /** Dimmed backdrop behind drawers and sheets */
   scrim: string;
 
-  /** Onboarding screen wash */
   welcome: string;
-  /** Conversation (chat) view */
   chatBackground: string;
   bubbleIn: string;
   bubbleOut: string;
   onBubbleOut: string;
 
-  /** HTML emails are authored for a light page, so they always render on this */
   emailCanvas: string;
   emailText: string;
 }
@@ -173,7 +154,6 @@ export const themes: Record<ColorScheme, ThemeColors> = {
   dark: darkColors,
 };
 
-/** Label color slots (names match the backend's LABEL_COLORS). */
 export const labelColors = {
   green: '#5ac14e',
   yellow: '#f6c73b',
@@ -186,7 +166,6 @@ export const labelColors = {
 } as const;
 export type LabelColor = keyof typeof labelColors;
 
-/** Initials-avatar backgrounds, picked per sender by hashing the name. */
 export const avatarColors = [
   '#c3caf8',
   '#e07dc0',
@@ -200,7 +179,6 @@ export const avatarColors = [
   '#79d266',
 ] as const;
 
-/** Attachment file-type badges. */
 export const fileColors = {
   pdf: '#e53935',
   doc: '#4285f4',
@@ -212,7 +190,6 @@ export const fileColors = {
 } as const;
 export type FileKind = keyof typeof fileColors;
 
-/** Readable text color on top of an arbitrary background (avatars, badges). */
 export function textOn(hex: string): string {
   const n = parseInt(hex.slice(1), 16);
   const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {

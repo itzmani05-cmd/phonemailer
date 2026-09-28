@@ -1,0 +1,86 @@
+# PhoneMail — Buildathon Progress & Next Steps
+
+_Last updated: 2026-09-28. Checked against `data/Task (1).docx` and `data/PPT (1).pptx`._
+
+Legend: ✅ done · 🟡 partly done · ❌ not started
+
+---
+
+## 1. Where we are
+
+### Backend (NestJS + PostgreSQL)
+| Item | Status | Notes |
+|---|---|---|
+| Send email (`POST /email/send`, Nodemailer) | ✅ | Works through Gmail SMTP; sent mail saved in Postgres. |
+| Phone OTP sign-in (`/auth/otp/request`, `/auth/otp/verify`, JWT) | ✅ | Twilio Verify worked end to end; trial credit now used up, so dev mode (OTP printed in backend log) is on. |
+| One account per phone number, `<number>@phonemail.com` | ✅ | Created automatically on first sign-in. |
+| Receiving email (mail-server → `POST /mail/inbound`) | ✅ | MailParser → backend looks up `<number>@MAIL_DOMAIN` → copy saved in that user's mailbox (Postgres). Unknown users get SMTP 550; other domains 550 (not a relay). |
+| Per-user mailbox (`/mail`, `/labels`) | ✅ | Scoped to the signed-in user; attachments and labels stored in Postgres. Dev-only fallback to the `ACCOUNT_PHONE` mailbox for clients without sign-in (web). |
+| PhoneMail → PhoneMail sending | ✅ | Delivered straight into the recipient's inbox, no Gmail relay, so From is the real PhoneMail address. |
+| Correct "From" address on mail to outside addresses | 🟡 | Gmail SMTP rewrites From to the Gmail account. Fine between PhoneMail users (local delivery). |
+| Drafts / Spam / Trash / Favorites (starred) | 🟡 | Folder + starred stored per message in Postgres; saving drafts from the apps not built yet. |
+| SMS notification on new email | ✅ | "You have received an email from <Sender>. Subject: <Subject>." sent via Twilio for users without the app (`User.mobileAppAt` unset; set when the mobile app signs in or opens). Real SMS needs Twilio credit; dev mode logs it. |
+| Toll-free IVR sign-up (call, press 1) | ❌ | Twilio Voice webhook. |
+| Sign-up by SMS | ❌ | Twilio incoming SMS webhook. |
+| Alias IDs | ❌ | Needs a table + API. |
+| Password login fallback | ❌ | Only needed if no OTP provider is available (dev-mode OTP may be enough). |
+
+### Mobile client (Expo / React Native)
+| Item | Status | Notes |
+|---|---|---|
+| Onboarding intro screens | ✅ | |
+| Screen 1: Language selection | ❌ | |
+| Screen 2: Terms & Conditions | 🟡 | `terms.tsx` exists; must be a step in the flow, in this order. |
+| Screen 3: Phone number, auto-detected from SIM | 🟡 | Manual entry works; SIM auto-detect + permission prompt missing. |
+| Screen 4: OTP, auto-detected and verified | 🟡 | OS autofill + auto-submit on 6 digits; no Android SMS Retriever / User Consent yet. |
+| Permissions at the right step (SIM, SMS, contacts) | ❌ | |
+| Chats list (no Inbox/Sent split), full-width search | ✅ | |
+| Filter chips: **All, Unread, Attachments, Favorites** | 🟡 | Currently All, Unread + label chips. Need Attachments & Favorites. |
+| Top-left menu: Home, Drafts, Spam, Trash | 🟡 | Drawer exists; opened from the avatar — check it matches (menu left, profile right). |
+| Top-right profile icon → settings | 🟡 | Settings only has theme. Need alias IDs, language, personal details, profile picture. |
+| Compose button bottom-right (traditional view) | 🟡 | Compose fixed today (route clash); spec wants it bottom-right. |
+| Chat view: search a number → open chat → type | 🟡 | Conversation screen + reply box exist; start-by-searching-a-number needs checking. |
+| Compact Subject field above message box (hidden when replying) | ❌ | |
+| Swipe right to reply / tag original message; reply only once per message | ❌ | |
+| Tap long email → traditional view, Reply at bottom | 🟡 | `mail/[id].tsx` exists. |
+| Traditional compose from inside chat with **locked** To | 🟡 | To is pre-filled but editable. |
+| Group chat when composing to 2+ recipients | ❌ | 1:1 mail stays in 1:1 chat. |
+| WhatsApp design language throughout | 🟡 | Review every screen. |
+| ⭐ PhoneMail ID card (extra) | ✅ | More → profile card: name, number, address, QR. Scan → that person's card → Send Email / Chat / Share. QR = `phonemailer://u/<number>?name=…`. |
+
+### Web client (React + Vite)
+| Item | Status | Notes |
+|---|---|---|
+| Gmail-like inbox, reader, compose | ✅ | |
+| Login: one screen — phone, OTP, **Next**, "By signing up, you agree to the Terms of Service" link | ❌ | Backend API is ready. |
+| Separate registration portal (phone + OTP only, fields reset after each account) | ❌ | |
+| Profile & Settings pages | ❌ | |
+
+### Delivery
+| Item | Status | Notes |
+|---|---|---|
+| `docker compose up -d` (postgres, backend, mail-server, web) | 🟡 | Services defined; needs a clean full-stack test with the new auth + migrations. |
+| README | 🟡 | Update at the end with setup, Twilio notes and screenshots. |
+| Git history | ❌ | Everything since "first commit" is uncommitted. |
+
+---
+
+## 2. What to do next (in order)
+
+Brief says **prioritise the mobile client**, so mobile blocks come first after the data fix.
+
+1. **Commit current work** — a safe checkpoint before bigger changes.
+2. ~~**Per-user mailbox in Postgres**~~ ✅ done 2026-09-28 (received mail per user, local PhoneMail → PhoneMail delivery).
+3. **Mobile sign-up flow in spec order**: Language → Terms → Phone (SIM auto-detect) → OTP (auto-detect), with permission prompts at each step.
+4. **Mobile home to spec**: chips All/Unread/Attachments/Favorites, menu left + profile right, Compose bottom-right.
+5. **Mobile chat to spec**: subject field (hidden on reply), swipe-to-reply linked to the original, reply once per message, locked To in traditional view, group chats.
+6. **Settings/profile**: alias IDs, language, personal details, profile picture (mobile + web).
+7. **Web**: single-screen phone+OTP login with Terms link; separate registration portal; profile & settings.
+8. **Twilio features**: ~~SMS notification on new mail~~ ✅; toll-free IVR "press 1" sign-up; sign-up by SMS. Needs Twilio credit (trial expired) — upgrade or a new trial.
+9. **Docker**: `docker compose up -d` from a clean clone, migrations run automatically.
+10. **README + demo**: document everything; screenshots of mobile and web.
+
+## 3. Open questions / blockers
+- **Twilio**: trial expired (error 60628). Needed for real OTP, SMS notifications and IVR. Old credentials backed up outside the repo.
+- **Domain**: `phonemail.com` is not ours, so internet mail to `…@phonemail.com` cannot arrive. Demo receiving locally (send to mail-server on port 2525) or use an owned domain.
+- `data/mobileui.jpeg` and `data/webui.jpeg` are deleted in the working tree — restore them if they are still the design reference.

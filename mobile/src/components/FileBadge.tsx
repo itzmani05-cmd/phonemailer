@@ -3,7 +3,6 @@ import { StyleSheet, View } from 'react-native'
 import { useTheme } from '@/theme/ThemeProvider'
 import { Text } from './Text'
 
-/** Colored document tile (red "PDF", green "XLS", …) from the designs. */
 export function FileBadge({
   filename,
   contentType,

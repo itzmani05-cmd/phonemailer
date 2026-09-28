@@ -100,7 +100,6 @@ export function Compose({ draft, onClose, onSend }: Props) {
   const fileInput = useRef<HTMLInputElement>(null)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
 
-  // Forward: re-attach the original files.
   useEffect(() => {
     const original = draft.forwardOf
     if (!original?.attachments.length) return
@@ -123,7 +122,6 @@ export function Compose({ draft, onClose, onSend }: Props) {
     }
   }, [draft.forwardOf])
 
-  // Replies start with the cursor above the quoted text.
   useEffect(() => {
     if (draft.inReplyTo) bodyRef.current?.setSelectionRange(0, 0)
   }, [draft.inReplyTo])

@@ -16,10 +16,6 @@ import {
 const MAX_RECIPIENTS = 50;
 const MAX_ATTACHMENTS = 10;
 
-// class-validator runs decorators bottom-up; with stopAtFirstError the lowest
-// one reports first, so type checks sit at the bottom of each stack.
-
-/** Accept `"a@x.com"` or `["a@x.com", "b@x.com"]`. */
 const toArray = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? [value] : value;
 
@@ -34,7 +30,6 @@ export class AttachmentDto {
   @IsOptional()
   contentType?: string;
 
-  /** File bytes, base64-encoded. Total size is capped in EmailService. */
   @IsBase64()
   @IsString()
   content!: string;
@@ -66,7 +61,6 @@ export class SendEmailDto {
   @IsOptional()
   replyTo?: string;
 
-  /** Message-ID being replied to, so clients thread the reply. */
   @MaxLength(998)
   @IsString()
   @IsOptional()
@@ -77,7 +71,6 @@ export class SendEmailDto {
   @IsString()
   subject!: string;
 
-  // At least one body is required; `text` is validated only when `html`/`body` are absent.
   @ValidateIf(
     (o: SendEmailDto) =>
       (o.html === undefined && o.body === undefined) || o.text !== undefined,
@@ -86,7 +79,6 @@ export class SendEmailDto {
   @IsString({ message: 'body, text or html is required' })
   text?: string;
 
-  /** Plain-text body; alias for `text` (used when `text` is absent). */
   @IsNotEmpty()
   @IsString()
   @IsOptional()

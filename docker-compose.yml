@@ -21,7 +21,6 @@ services:
       PORT: 3000
       DATABASE_URL: postgres://${POSTGRES_USER:-phonemail}:${POSTGRES_PASSWORD:-phonemail}@postgres:5432/${POSTGRES_DB:-phonemail}
       INBOUND_SECRET: ${INBOUND_SECRET:-change-me}
-      # Outbound relay for POST /email/send
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}
@@ -30,7 +29,6 @@ services:
       MAIL_FROM: ${MAIL_FROM:-}
       EMAIL_API_KEY: ${EMAIL_API_KEY:?set EMAIL_API_KEY in .env}
       MAIL_DOMAIN: ${MAIL_DOMAIN:-phonemail.com}
-      # Phone sign-in
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
@@ -49,9 +47,9 @@ services:
     environment:
       SMTP_PORT: 2525
       BACKEND_URL: http://backend:3000
+      MAIL_DOMAIN: ${MAIL_DOMAIN:-phonemail.com}
       INBOUND_SECRET: ${INBOUND_SECRET:-change-me}
     ports:
-      # Map host 25 -> 2525 in production so real MTAs can deliver.
       - "${SMTP_HOST_PORT:-2525}:2525"
     depends_on:
       - backend

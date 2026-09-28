@@ -32,7 +32,6 @@ interface MailContextValue {
   refresh: () => Promise<void>
   update: (id: string, changes: MailChanges) => Promise<void>
   updateMany: (ids: string[], changes: MailChanges) => Promise<void>
-  /** Permanent delete (from Trash). */
   removeMany: (ids: string[]) => Promise<void>
   send: (email: SendEmailRequest) => Promise<void>
 }
@@ -42,8 +41,6 @@ const MailContext = createContext<MailContextValue | null>(null)
 export function MailProvider({ children }: { children: ReactNode }) {
   const { status, token, signOut } = useAuth()
   const signedIn = status === 'signedIn'
-  // Tagged with the session token that loaded them, so signing in as someone
-  // else never shows the previous user's mailbox, even for a moment.
   const [inbox, setInbox] = useState<{ owner: string | null; mails: Mail[] }>({
     owner: null,
     mails: [],
@@ -88,10 +85,6 @@ export function MailProvider({ children }: { children: ReactNode }) {
     setRefreshing(false)
   }, [load])
 
-  /**
-   * Confirms the session with the server and loads its mailbox profile.
-   * An expired token or deleted account (401) signs the app out.
-   */
   const checkSession = useCallback(async () => {
     try {
       const { account: a } = await api.me()
@@ -106,11 +99,9 @@ export function MailProvider({ children }: { children: ReactNode }) {
     api.labels().then(setLabels).catch(() => {})
   }, [signedIn, token])
 
-  // Poll only while signed in and the app is in the foreground.
   useEffect(() => {
     if (!signedIn) return
     let timer: ReturnType<typeof setInterval> | undefined
-    // On launch and each return to the foreground: re-check the session, then poll.
     const start = () => {
       void checkSession()
       void load()

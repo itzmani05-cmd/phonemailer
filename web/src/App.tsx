@@ -53,7 +53,6 @@ const App = () => {
   const [compose, setCompose] = useState<ComposeDraft | null>(null)
   const [composeKey, setComposeKey] = useState(0)
   const [menuOpen, setMenuOpen] = useState(false)
-  // Re-evaluate snoozes periodically so snoozed mail comes back on time.
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000)
@@ -110,7 +109,6 @@ const App = () => {
   const updateSelected = (changes: MailChanges) => {
     if (!selected) return
     void box.update(selected.id, changes)
-    // Leaving the current view (archive, delete, snooze, spam, unread) closes the message.
     const leaves =
       changes.folder !== undefined || changes.snoozedUntil !== undefined || changes.read === false
     if (leaves) setSelectedId(null)

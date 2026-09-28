@@ -3,7 +3,6 @@ import { Text } from '@/components/Text'
 import { useTheme } from '@/theme/ThemeProvider'
 import { font, spacing } from '@/theme/metrics'
 
-// Placeholder copy: replace with the reviewed Terms & Conditions before release.
 const SECTIONS = [
   {
     title: 'Your account',

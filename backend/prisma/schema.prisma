@@ -1,9 +1,6 @@
-// Run `npm run db:migrate` after changing this file (regenerates the client too).
-
 generator client {
   provider     = "prisma-client"
   output       = "../src/generated/prisma"
-  // Nest compiles to CommonJS.
   moduleFormat = "cjs"
 }
 
@@ -11,24 +8,21 @@ datasource db {
   provider = "postgresql"
 }
 
-/// A PhoneMail account: <phone>@<MAIL_DOMAIN>.
 model User {
   id          String    @id @default(uuid())
-  /// E.164, e.g. +919876543210 (the only stored format)
   phone       String?   @unique
   email       String    @unique
   name        String?
   createdAt   DateTime  @default(now())
   lastLoginAt DateTime?
+  mobileAppAt DateTime?
   messages    Message[]
+  labels      Label[]
 }
 
-/// SMS login codes. Only an HMAC of the code is stored.
 model OtpCode {
   id         String    @id @default(uuid())
-  /// E.164
   phone      String
-  /// HMAC of our own code; null when Twilio Verify holds the code.
   codeHash   String?
   expiresAt  DateTime
   attempts   Int       @default(0)
@@ -50,28 +44,56 @@ enum RecipientType {
   BCC
 }
 
-/// An email sent from PhoneMail through the SMTP relay.
+enum MailDirection {
+  in
+  out
+}
+
+enum MailFolder {
+  inbox
+  sent
+  drafts
+  archive
+  spam
+  trash
+}
+
+enum MailCategory {
+  primary
+  social
+  promotions
+}
+
 model Message {
-  id            String        @id @default(uuid())
-  senderId      String
-  sender        User          @relation(fields: [senderId], references: [id])
-  /// From header as sent, e.g. `"Mani" <9876543210@phonemail.com>`
+  id            String         @id @default(uuid())
+  ownerId       String
+  owner         User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  direction     MailDirection
+  folder        MailFolder     @default(inbox)
+  category      MailCategory   @default(primary)
+  labels        String[]       @default([])
+  read          Boolean        @default(false)
+  starred       Boolean        @default(false)
+  snoozedUntil  DateTime?
   fromHeader    String
+  envelopeFrom  String?
   subject       String
   text          String?
   html          String?
+  messageId     String?
   inReplyTo     String?
-  status        MessageStatus @default(PENDING)
-  /// Message-ID assigned when the relay accepted it
-  smtpMessageId String?
+  date          DateTime       @default(now())
+  size          Int            @default(0)
+  status        MessageStatus?
   smtpResponse  String?
   error         String?
-  createdAt     DateTime      @default(now())
+  createdAt     DateTime       @default(now())
   sentAt        DateTime?
   recipients    Recipient[]
   attachments   Attachment[]
 
-  @@index([senderId, createdAt])
+  @@index([ownerId, createdAt])
+  @@index([ownerId, messageId])
 }
 
 model Recipient {
@@ -85,14 +107,25 @@ model Recipient {
   @@index([email])
 }
 
-/// Metadata only; file bytes are not stored in the database.
 model Attachment {
   id          String  @id @default(uuid())
   messageId   String
   message     Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  filename    String
+  index       Int     @default(0)
+  filename    String?
   contentType String
   size        Int
+  content     Bytes?
 
   @@index([messageId])
+}
+
+model Label {
+  id      String @id @default(uuid())
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name    String
+  color   String
+
+  @@unique([ownerId, name])
 }

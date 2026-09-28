@@ -12,7 +12,6 @@ export async function completeOnboarding() {
   await AsyncStorage.setItem(KEY, '1').catch(() => {})
 }
 
-/** null while loading from storage. */
 export function useOnboarded(): boolean | null {
   const [done, setDone] = useState<boolean | null>(cached)
   useEffect(() => {

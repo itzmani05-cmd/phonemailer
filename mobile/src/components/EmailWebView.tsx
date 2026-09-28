@@ -5,8 +5,6 @@ import { WebView } from 'react-native-webview'
 import { useTheme } from '@/theme/ThemeProvider'
 import { radius } from '@/theme/metrics'
 
-// The CSP blocks every script the email itself carries. Our height reporter is
-// injected natively (not via <script>), so CSP does not apply to it.
 function emailDocument(html: string) {
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -25,7 +23,6 @@ const REPORT_HEIGHT = `
 })();
 true;`
 
-/** Renders an HTML email at its natural height so it scrolls with the rest of the reader. */
 export function EmailWebView({ html }: { html: string }) {
   const { colors } = useTheme()
   const [height, setHeight] = useState(200)

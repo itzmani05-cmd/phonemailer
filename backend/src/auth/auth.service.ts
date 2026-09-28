@@ -12,14 +12,11 @@ import { mailboxAddress, parsePhone, type Phone } from './phone';
 
 const GB = 1024 ** 3;
 
-/** Seconds; JWT_EXPIRES_IN_DAYS defaults to 30. Read per call, after .env loads. */
 const tokenTtlSeconds = () =>
   Number(process.env.JWT_EXPIRES_IN_DAYS ?? 30) * 24 * 60 * 60;
 
-/** The signed-in user, as attached to requests by the auth guards. */
 export interface AuthUser {
   id: string;
-  /** E.164 */
   phone: string | null;
   email: string;
   name: string | null;
@@ -29,7 +26,6 @@ function toAuthUser(u: User): AuthUser {
   return { id: u.id, phone: u.phone, email: u.email, name: u.name };
 }
 
-/** Shape of GET /account (shared/mail Account) for a signed-in user. */
 export function toAccount(user: AuthUser) {
   const phone = user.phone ? parsePhone(user.phone) : null;
   return {
@@ -70,10 +66,11 @@ export class AuthService {
     };
   }
 
-  async verifyOtp(dto: VerifyOtpDto) {
+  async verifyOtp(dto: VerifyOtpDto, client?: string) {
     const phone = this.parse(dto);
     await this.otp.verify(phone.e164, dto.code);
     const { user, isNewUser } = await this.findOrCreate(phone);
+    if (client === 'mobile') await this.markMobileApp(user.id);
     const authUser = toAuthUser(user);
     const expiresIn = tokenTtlSeconds();
     const accessToken = await this.jwt.signAsync(
@@ -91,11 +88,16 @@ export class AuthService {
     };
   }
 
-  /** One account per phone number: log in if it exists, otherwise create it. */
+  async markMobileApp(userId: string) {
+    await this.prisma.user.updateMany({
+      where: { id: userId, mobileAppAt: null },
+      data: { mobileAppAt: new Date() },
+    });
+  }
+
   private async findOrCreate(phone: Phone) {
     const email = mailboxAddress(phone);
     const lastLoginAt = new Date();
-    // Also match by address: sends made before sign-in existed created the row by email.
     const existing = await this.prisma.user.findFirst({
       where: { OR: [{ phone: phone.e164 }, { email }] },
     });
@@ -112,7 +114,6 @@ export class AuthService {
       });
       return { user, isNewUser: true };
     } catch (err) {
-      // Two verifications racing for a new number: the other one created it.
       const user = await this.prisma.user.findUnique({
         where: { phone: phone.e164 },
       });
@@ -121,7 +122,27 @@ export class AuthService {
     }
   }
 
-  /** Resolves a bearer token to its user, or null if invalid/expired/deleted. */
+  async defaultUser(): Promise<AuthUser | null> {
+    if (process.env.NODE_ENV === 'production') return null;
+    const phone = parsePhone(process.env.ACCOUNT_PHONE ?? '');
+    if (!phone) return null;
+    const email = mailboxAddress(phone);
+    const existing = await this.prisma.user.findFirst({
+      where: { OR: [{ phone: phone.e164 }, { email }] },
+    });
+    if (existing) return toAuthUser(existing);
+    const user = await this.prisma.user.upsert({
+      where: { email },
+      update: {},
+      create: {
+        phone: phone.e164,
+        email,
+        name: process.env.ACCOUNT_NAME || null,
+      },
+    });
+    return toAuthUser(user);
+  }
+
   async userFromToken(token: string): Promise<AuthUser | null> {
     try {
       const { sub } = await this.jwt.verifyAsync<{ sub: string }>(token);

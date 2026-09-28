@@ -1,8 +1,10 @@
 import { formatPhone } from '@shared/mail'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { router } from 'expo-router'
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Avatar } from '@/components/Avatar'
 import { MenuList } from '@/components/Drawer'
+import { Icon } from '@/components/Icon'
 import { Text } from '@/components/Text'
 import { useMail } from '@/data/MailProvider'
 import { useTheme } from '@/theme/ThemeProvider'
@@ -18,7 +20,16 @@ export default function MoreScreen() {
         <Text style={[styles.title, { color: colors.text }]}>More</Text>
 
         {account && (
-          <View style={[styles.profile, { backgroundColor: colors.surfaceSelected }]}>
+          <Pressable
+            onPress={() => router.push('/identity')}
+            accessibilityRole="button"
+            accessibilityLabel="Show my PhoneMail ID"
+            style={({ pressed }) => [
+              styles.profile,
+              { backgroundColor: colors.surfaceSelected },
+              pressed && { opacity: 0.85 },
+            ]}
+          >
             <Avatar name={account.name} size={56} tone="primary" />
             <View style={styles.profileText}>
               <Text style={[styles.name, { color: colors.text }]}>{account.name}</Text>
@@ -31,7 +42,8 @@ export default function MoreScreen() {
                 {account.address}
               </Text>
             </View>
-          </View>
+            <Icon name="qrCode" size={26} color={colors.primary} />
+          </Pressable>
         )}
 
         <MenuList showInbox={false} />

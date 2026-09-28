@@ -10,7 +10,6 @@ import { useOnboarded } from '@/data/onboarding'
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider'
 import { fontAssets, fonts } from '@/theme/fonts'
 
-// Keep the splash screen up until Inter, the onboarding flag and the saved session are ready.
 void SplashScreen.preventAutoHideAsync()
 
 function ThemedStack() {
@@ -31,7 +30,6 @@ function ThemedStack() {
           contentStyle: { backgroundColor: colors.surface },
         }}
       >
-        {/* Guards are checked in order; the first open screen is where the app lands. */}
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="conversation/[address]" />
@@ -40,6 +38,9 @@ function ThemedStack() {
           <Stack.Screen name="compose" options={{ presentation: 'modal' }} />
           <Stack.Screen name="settings" options={{ headerShown: true, title: 'Settings' }} />
           <Stack.Screen name="help" options={{ headerShown: true, title: 'Help & Support' }} />
+          <Stack.Screen name="identity" options={{ headerShown: true, title: 'My PhoneMail ID' }} />
+          <Stack.Screen name="u/[phone]" options={{ headerShown: true, title: 'PhoneMail ID' }} />
+          <Stack.Screen name="scan" options={{ headerShown: true, title: 'Scan PhoneMail ID' }} />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn && onboarded === false}>
           <Stack.Screen name="onboarding" />
@@ -64,7 +65,6 @@ function Gate() {
     if (ready) void SplashScreen.hideAsync()
   }, [ready])
 
-  // On a font error, render anyway with the system font rather than hang on the splash.
   if (!ready) return null
   return <ThemedStack />
 }

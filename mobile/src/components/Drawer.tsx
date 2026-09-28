@@ -114,7 +114,6 @@ const FOLDERS: { view: MailView; label: string; icon: IconName }[] = [
   { view: 'trash', label: 'Trash', icon: 'trash' },
 ]
 
-/** Menu content (also reused by the More tab). */
 export function MenuList({ onNavigate, showInbox = true }: { onNavigate?: () => void; showInbox?: boolean }) {
   const { colors } = useTheme()
   const { mails, labels } = useMail()
@@ -127,7 +126,6 @@ export function MenuList({ onNavigate, showInbox = true }: { onNavigate?: () => 
       onNavigate?.()
       void signOut()
     }
-    // Alert.alert does nothing on react-native-web.
     if (Platform.OS === 'web') {
       if (window.confirm(`${title}\n\n${message}`)) leave()
       return
@@ -215,7 +213,6 @@ function DrawerPanel({ visible, onClose }: { visible: boolean; onClose: () => vo
   const panelWidth = Math.min(320, width * 0.82)
   const [progress] = useState(() => new Animated.Value(0))
   const [mounted, setMounted] = useState(visible)
-  // Mount immediately on open; unmount only after the close animation ends.
   if (visible && !mounted) setMounted(true)
 
   useEffect(() => {

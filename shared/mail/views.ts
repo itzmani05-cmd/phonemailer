@@ -2,7 +2,6 @@ import { avatarColors, fileColors, textOn, type FileKind } from '../theme/colors
 import { senderAddress, senderName } from './format'
 import type { Mail, MailCategory } from './types'
 
-/** Sidebar / drawer destinations. */
 export type MailView =
   | 'inbox'
   | 'starred'
@@ -71,14 +70,11 @@ export function categoryOf(m: Mail): MailCategory {
   return m.category
 }
 
-// ---------- People ----------
-
 export interface Person {
   name: string
   address: string
 }
 
-/** The other side of a message: the sender for received mail, the first recipient for sent. */
 export function counterpart(m: Mail): Person {
   if (m.direction === 'out') {
     const address = m.to[0] ?? m.envelope.to[0] ?? ''
@@ -89,12 +85,11 @@ export function counterpart(m: Mail): Person {
 
 export interface Conversation {
   person: Person
-  messages: Mail[] // oldest first
+  messages: Mail[]
   latest: Mail
   unread: number
 }
 
-/** Groups mail into chat-style threads per contact (newest conversation first). */
 export function conversations(mails: Mail[]): Conversation[] {
   const byAddress = new Map<string, Mail[]>()
   const names = new Map<string, string>()
@@ -103,7 +98,6 @@ export function conversations(mails: Mail[]): Conversation[] {
     const p = counterpart(m)
     if (!p.address) continue
     byAddress.set(p.address, [...(byAddress.get(p.address) ?? []), m])
-    // Prefer a real display name from received mail over the address-derived one.
     if (m.direction === 'in' || !names.has(p.address)) names.set(p.address, p.name)
   }
   return [...byAddress.entries()]
@@ -131,8 +125,6 @@ export function contacts(mails: Mail[]): Contact[] {
     lastAt: c.latest.receivedAt,
   }))
 }
-
-// ---------- Visual helpers ----------
 
 export function avatarColor(seed: string): { background: string; color: string } {
   let hash = 0

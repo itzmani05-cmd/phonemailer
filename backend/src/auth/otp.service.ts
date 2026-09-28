@@ -21,11 +21,6 @@ function tooManyRequests(message: string, retryAfter?: number) {
   );
 }
 
-/**
- * SMS one-time codes. Phones are E.164. With Twilio Verify configured, Twilio
- * makes and checks the code; otherwise only an HMAC of our own code is stored.
- * Either way the rows here enforce cooldown, hourly and attempt limits.
- */
 @Injectable()
 export class OtpService {
   constructor(
@@ -41,7 +36,6 @@ export class OtpService {
       .digest('hex');
   }
 
-  /** Creates a code and texts it. */
   async request(phone: string): Promise<void> {
     const now = Date.now();
     const recent = await this.prisma.otpCode.findMany({
@@ -65,7 +59,6 @@ export class OtpService {
 
     const viaVerify = this.verifyApi.configured;
     const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
-    // Only the newest code stays valid.
     await this.prisma.otpCode.updateMany({
       where: { phone, consumedAt: null },
       data: { consumedAt: new Date() },
@@ -89,7 +82,6 @@ export class OtpService {
     }
 
     let body = `${code} is your PhoneMail verification code. It expires in ${OTP_TTL_SECONDS / 60} minutes. Do not share it with anyone.`;
-    // Android's SMS Retriever API only reads messages ending with the app hash.
     if (process.env.ANDROID_SMS_APP_HASH) {
       body += `\n\n${process.env.ANDROID_SMS_APP_HASH}`;
     }
@@ -101,7 +93,6 @@ export class OtpService {
     }
   }
 
-  /** Checks and consumes the latest code; throws on any failure. */
   async verify(phone: string, code: string): Promise<void> {
     const otp = await this.prisma.otpCode.findFirst({
       where: { phone, consumedAt: null, expiresAt: { gt: new Date() } },
@@ -113,7 +104,6 @@ export class OtpService {
       );
     }
 
-    // Count the attempt before comparing, so parallel guesses can't bypass the limit.
     const counted = await this.prisma.otpCode.updateMany({
       where: { id: otp.id, consumedAt: null, attempts: { lt: MAX_ATTEMPTS } },
       data: { attempts: { increment: 1 } },

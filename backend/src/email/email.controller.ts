@@ -16,17 +16,12 @@ import { EmailService } from './email.service';
 export class EmailController {
   constructor(private readonly emailService: EmailService) {}
 
-  /**
-   * Sends through the configured SMTP relay; resolves once the relay accepts it.
-   * Signed-in users send as their own <phone>@<domain> address.
-   */
   @Post('send')
   @HttpCode(200)
   send(@Body() dto: SendEmailDto, @CurrentUser() user?: AuthUser) {
     return this.emailService.send(dto, user);
   }
 
-  /** Live SMTP connection check (EHLO + auth). */
   @Get('status')
   status() {
     return this.emailService.status();

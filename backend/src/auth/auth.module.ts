@@ -4,7 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { randomBytes } from 'node:crypto';
 import { emailConfig } from '../email/email.config';
 import { AuthController } from './auth.controller';
-import { ApiAuthGuard, JwtAuthGuard } from './auth.guards';
+import { ApiAuthGuard, JwtAuthGuard, MailboxGuard } from './auth.guards';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { SmsService } from './sms.service';
@@ -13,7 +13,6 @@ import { TwilioVerifyService } from './verify.service';
 @Module({
   imports: [
     ConfigModule.forFeature(emailConfig),
-    // Factory, so JWT_SECRET is read after ConfigModule has loaded .env.
     JwtModule.registerAsync({
       useFactory: () => {
         let secret = process.env.JWT_SECRET;
@@ -38,7 +37,15 @@ import { TwilioVerifyService } from './verify.service';
     TwilioVerifyService,
     JwtAuthGuard,
     ApiAuthGuard,
+    MailboxGuard,
   ],
-  exports: [AuthService, JwtAuthGuard, ApiAuthGuard, ConfigModule],
+  exports: [
+    AuthService,
+    JwtAuthGuard,
+    ApiAuthGuard,
+    MailboxGuard,
+    SmsService,
+    ConfigModule,
+  ],
 })
 export class AuthModule {}

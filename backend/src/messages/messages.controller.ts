@@ -14,7 +14,6 @@ import { MessagesService } from './messages.service';
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
 
-  /** Sent messages, newest first. Signed-in users see only their own. */
   @Get()
   list(@CurrentUser() user?: AuthUser) {
     return this.messagesService.list(user?.id);

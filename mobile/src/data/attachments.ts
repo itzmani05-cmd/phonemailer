@@ -15,7 +15,6 @@ async function readBase64(uri: string): Promise<string> {
   return new File(uri).base64()
 }
 
-/** "Photos & Videos" */
 export async function pickMedia(): Promise<PickedFile[]> {
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images', 'videos'],
@@ -34,7 +33,6 @@ export async function pickMedia(): Promise<PickedFile[]> {
   )
 }
 
-/** "Files" and "Google Drive" (the system picker lists Drive as a source). */
 export async function pickDocuments(): Promise<PickedFile[]> {
   const result = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true })
   if (result.canceled) return []
@@ -48,7 +46,6 @@ export async function pickDocuments(): Promise<PickedFile[]> {
   )
 }
 
-/** "Scan Document": photograph a page with the camera. */
 export async function scanDocument(): Promise<PickedFile[]> {
   const permission = await ImagePicker.requestCameraPermissionsAsync()
   if (!permission.granted) throw new Error('Camera permission is needed to scan documents.')
@@ -65,7 +62,6 @@ export async function scanDocument(): Promise<PickedFile[]> {
   ]
 }
 
-/** Opens the attachment URL; the OS browser handles the download/preview. */
 export function openAttachment(mailId: string, index: number) {
   const url = api.attachmentUrl(mailId, index)
   if (Platform.OS === 'web') window.open(url, '_blank')

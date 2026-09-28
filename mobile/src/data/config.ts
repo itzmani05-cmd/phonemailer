@@ -2,11 +2,6 @@ import Constants from 'expo-constants'
 
 const BACKEND_PORT = 3000
 
-/**
- * EXPO_PUBLIC_API_URL wins. Otherwise reuse the host the dev server is on
- * (e.g. 192.168.1.5:8081 -> http://192.168.1.5:3000), so a physical phone
- * on the same Wi-Fi reaches the backend without extra setup.
- */
 function resolveApiUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL
   if (fromEnv) return fromEnv.replace(/\/$/, '')
@@ -17,5 +12,4 @@ function resolveApiUrl(): string {
 
 export const API_URL = resolveApiUrl()
 
-/** Domain of PhoneMail addresses, shown as a preview while signing in. */
 export const MAIL_DOMAIN = process.env.EXPO_PUBLIC_MAIL_DOMAIN ?? 'phonemail.com'

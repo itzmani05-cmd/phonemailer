@@ -17,7 +17,6 @@ import { spacing } from '@/theme/metrics'
 
 type Filter = 'all' | 'unread' | `label:${string}`
 
-// The design shows these two labels first.
 const LABEL_ORDER = ['Personal', 'Work']
 
 export default function ChatsScreen() {

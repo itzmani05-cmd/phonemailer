@@ -9,7 +9,6 @@ interface Props<T extends string> {
   onChange: (id: T) => void
 }
 
-/** "All · Unread · Personal · Work" filter pills from the inbox design. */
 export function Chips<T extends string>({ options, value, onChange }: Props<T>) {
   const { colors } = useTheme()
   return (

@@ -44,7 +44,6 @@ export default function ContactsScreen() {
       const last = out[out.length - 1]
       if (last?.kind === 'letter' && last.title.endsWith(letter)) last.data.push(c)
       else {
-        // The first letter section also carries the "All contacts" heading.
         out.push({ title: first && !q && out.length ? `All contacts\n${letter}` : letter, kind: 'letter', data: [c] })
         first = false
       }
