@@ -19,9 +19,6 @@ import { VoiceCallService } from './voice-call.service';
       useFactory: () => {
         let secret = process.env.JWT_SECRET;
         if (!secret) {
-          if (process.env.NODE_ENV === 'production') {
-            throw new Error('JWT_SECRET must be set in production');
-          }
           secret = randomBytes(32).toString('hex');
           new Logger('AuthModule').warn(
             'JWT_SECRET is not set; using a random one (sign-ins end on restart).',

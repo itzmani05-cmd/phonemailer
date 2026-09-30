@@ -1,247 +1,440 @@
 # PhoneMail
 
-| Folder         | Stack                | Dev command                   | Port |
-| -------------- | -------------------- | ----------------------------- | ---- |
-| `backend/`     | NestJS               | `npm run start:dev`           | 3000 |
-| `web/`         | React + Vite         | `npm run dev` (proxies `/api`) | 5173 |
-| `mobile/`      | React Native (Expo)  | `npm start`                   | —    |
-| `mail-server/` | Node `smtp-server`   | `npm run dev`                 | 2525 |
+**Your phone number is your email address.** PhoneMail is an email service where every account is
+a phone number (`9876543210@phonemail.com`). People can sign up from the mobile app, the web, a
+registration portal, a phone call (IVR) or an SMS, and read their mail in a WhatsApp-style mobile
+app or a Gmail-style web client. Users without the app get an SMS for every new email.
 
-## Mail flow
+Built for the **AlphaStack 7-Day Buildathon**.
+
+---
+
+## Contents
+
+1. [Quick start (Docker)](#1-quick-start-docker)
+2. [Architecture](#2-architecture)
+3. [Tech stack](#3-tech-stack)
+4. [Feature status against the brief](#4-feature-status-against-the-brief)
+5. [What is not done, and why](#5-what-is-not-done-and-why)
+6. [Configuration](#6-configuration)
+7. [Local development (without Docker)](#7-local-development-without-docker)
+8. [Twilio: OTP, SMS alerts, IVR and SMS sign-up](#8-twilio-otp-sms-alerts-ivr-and-sms-sign-up)
+9. [Sending from your own domain](#9-sending-from-your-own-domain)
+10. [Security](#10-security)
+11. [Testing](#11-testing)
+12. [API reference](#12-api-reference)
+13. [Project structure](#13-project-structure)
+
+---
+
+## 1. Quick start (Docker)
+
+**Requirements:** Docker Desktop (or Docker Engine + Compose v2). Nothing else.
+
+```sh
+git clone <this-repo> phonemailer
+cd phonemailer
+docker compose up -d
+```
+
+No `.env` file is needed for a first run. Compose builds and starts four containers:
+
+| Service | URL / port | What it is |
+|---|---|---|
+| `web` | <http://localhost:8080> | Gmail-style web client, registration portal (`/register`), terms (`/terms`) |
+| `backend` | <http://localhost:3000> | REST API (NestJS). Runs database migrations on start |
+| `mail-server` | `localhost:2525` (SMTP) | Receives email for `@phonemail.com` and hands it to the backend |
+| `postgres` | internal only | Database (data kept in the `pgdata` volume) |
+
+The mobile app runs on your phone through Expo (see [Mobile app](#mobile-app)); phones cannot run
+inside Docker.
+
+### Sign in
+
+1. Open <http://localhost:8080>, enter any Indian mobile number (e.g. `9876543210`) and press **Next**.
+2. Twilio is not configured in a fresh setup, so the code is **printed in the backend log** instead
+   of being texted:
+
+   ```sh
+   docker compose logs -f backend
+   # WARN [SmsService] Twilio not configured. SMS to +919876543210: 482913 is your PhoneMail verification code…
+   ```
+
+3. Enter the 6-digit code. The account `9876543210@phonemail.com` is created on first sign-in.
+
+To see the full flow, sign in with a second number in a private window and email the first one.
+Mail between PhoneMail users is delivered instantly, with no outside email provider needed.
+
+### Receive an email from "outside"
+
+Send any message to the local SMTP server; it lands in that number's inbox:
+
+```sh
+printf 'From: Alice <alice@example.com>\r\nTo: 9876543210@phonemail.com\r\nSubject: Hello\r\n\r\nHi there!\r\n' > hello.eml
+curl smtp://localhost:2525 --mail-from alice@example.com --mail-rcpt 9876543210@phonemail.com --upload-file hello.eml
+```
+
+If that number has no app, the backend also "sends" the SMS alert *"You have received an email
+from Alice. Subject: Hello."*, which appears in `docker compose logs backend` until Twilio is set up.
+
+### Useful commands
+
+```sh
+docker compose ps                 # status
+docker compose logs -f backend    # OTP codes and SMS alerts appear here
+docker compose down               # stop (data is kept)
+docker compose down -v            # stop and delete all data
+docker compose up -d --build      # rebuild after code changes
+```
+
+Ports already in use? Set `BACKEND_HOST_PORT`, `WEB_HOST_PORT` or `SMTP_HOST_PORT` in a `.env`
+file next to `docker-compose.yml` (copy `.env.example`).
+
+---
+
+## 2. Architecture
 
 ```
-sender MTA ──SMTP──▶ mail-server ──POST /mail/inbound──▶ backend ──▶ web / mobile
+                 ┌──────────────┐      REST + JWT       ┌───────────────────────┐
+  Mobile app ───▶│              │◀──────────────────────│  Web client (nginx)   │
+  (Expo, phone)  │   backend    │      /api proxy       │  React + Vite, :8080  │
+                 │  NestJS :3000│                       └───────────────────────┘
+                 │              │──── Prisma ────▶ PostgreSQL
+                 │              │──── SMTP (Nodemailer) ────▶ relay (Gmail / Resend) ──▶ internet
+                 │              │──── HTTPS ────▶ Twilio (SMS, voice calls, Verify)
+                 └──────▲───▲───┘
+    POST /mail/inbound  │   │  POST /twilio/voice, /twilio/sms (signed webhooks)
+    (shared secret)     │   └───────────────── Twilio phone number ◀── caller / SMS sender
+                 ┌──────┴───────┐
+  sender MTA ───▶│ mail-server  │  Node smtp-server + mailparser, :2525
+                 └──────────────┘
 ```
 
-`mail-server` parses each message and forwards it as JSON, authenticated with the
-`x-inbound-secret` header (`INBOUND_SECRET`). Fetch received mail with `GET /mail`.
+- **Mail to a PhoneMail address** from inside the app is delivered straight into the recipient's
+  mailbox. From outside, it arrives over SMTP at `mail-server`, which parses it and posts it to the
+  backend.
+- **Mail to other addresses** (Gmail, …) goes out through the SMTP relay configured in `SMTP_*`.
+- **The web and mobile apps share code** from `shared/`: API client, mail types, filters,
+  translations (English / Tamil / Hindi), icons and the colour theme.
 
-Run locally: `cd mail-server`, `cp .env.example .env`, then set `MAIL_DOMAIN` and
-`INBOUND_SECRET` to the same values as in `backend/.env` (otherwise the backend rejects every
-message with 401 and senders get `451`), and `npm run dev`.
+---
 
-## Sending with your own domain
+## 3. Tech stack
 
-Outgoing mail to Gmail etc. is sent over SMTP with the user's own address as From
-(`<number>@MAIL_DOMAIN`). Gmail SMTP rewrites that From, so use a provider that lets you verify
-the domain, e.g. Resend:
+| Layer | Technology | Why |
+|---|---|---|
+| Backend | **Node.js 22, NestJS 11, TypeScript** | Brief asks for Node.js/Go; Nest gives modules, guards and validation out of the box |
+| Database | **PostgreSQL 16, Prisma 7** | Relational data (users, messages, recipients, labels, aliases) with typed queries and migrations |
+| Outgoing mail | **Nodemailer** over SMTP | Works with any relay (Gmail, Resend, SES…) |
+| Incoming mail | **smtp-server + mailparser** | Small local SMTP server ("SMTP (local)" in the brief) |
+| Telephony | **Twilio** (SMS, Verify, Programmable Voice/TwiML) | IVR, SMS gateway and OTP from one provider |
+| Web client | **React 19, Vite 8, TypeScript**, plain CSS with design tokens | Fast, no UI framework lock-in; light/dark themes; responsive |
+| Mobile client | **Expo SDK 57, React Native 0.86, Expo Router** | One codebase for Android and iOS; runs in Expo Go for demos |
+| Shared code | `shared/` TypeScript package | Same API client, types, i18n and theme in web and mobile |
+| Auth | Phone number + 6-digit OTP, **JWT** sessions | Passwordless, as the brief prefers |
+| Packaging | **Docker, Docker Compose**, nginx for the web build | `docker compose up -d` starts everything |
+| Tests | **Jest, Supertest** (unit + end-to-end against a real Postgres) | 28 unit and 92 end-to-end tests |
 
-1. Add the domain (e.g. `mail.example.com`) in Resend and add its DNS records (DKIM, SPF/bounce
-   MX, plus a DMARC TXT `v=DMARC1; p=none;`) at your DNS provider; wait for **Verified**.
-2. In `backend/.env`: `MAIL_DOMAIN=mail.example.com`, `SMTP_HOST=smtp.resend.com`,
-   `SMTP_PORT=465`, `SMTP_SECURE=true`, `SMTP_USER=resend`, `SMTP_PASS=<Resend API key>`,
-   `MAIL_FROM=` (empty: falls back to `ACCOUNT_PHONE@MAIL_DOMAIN`).
-3. Use the same `MAIL_DOMAIN` in `mail-server/.env`.
-4. Accounts created before the change keep their old stored address; update `User.email`
-   (e.g. in `npm run db:studio`) so they send from the new domain.
+---
 
-Receiving internet mail at that domain additionally needs an MX record pointing to a public
-mail-server (or an inbound-email service forwarding to `POST /mail/inbound`).
+## 4. Feature status against the brief
 
-## Backend setup (PostgreSQL + Prisma)
+✅ done  ·  🟡 partly done  ·  ❌ not done ([reasons in section 5](#5-what-is-not-done-and-why))
+
+### Account creation
+
+| Requirement | Status | Notes |
+|---|---|---|
+| Call a number and press **1** (IVR) | ✅ built, 🟡 not live | `POST /twilio/voice`: press 1 to register, 2 to repeat, anything else "Invalid option". Caller ID becomes the account; hidden or foreign caller ID → type the number on the keypad and confirm with an SMS code. Fully tested locally; real calls wait for Twilio approval (§5). |
+| Sign up by **SMS** | ✅ built, 🟡 not live | Text `JOIN` to the Twilio number; the reply contains the new address. |
+| Web **registration portal**: phone + OTP only, fields reset after each account | ✅ | `/register` creates the account, shows the address, clears the form, never signs in. |
+| Sign up from the web client and mobile app | ✅ | First sign-in with a new number creates the account. |
+| One account per number, `<number>@domain` | ✅ | Unique in the database; concurrent sign-ups from the same number create one account. |
+| Password login if no free OTP provider | ❌ | Not needed: OTP works through Twilio, and a free development fallback prints codes in the log (§5). |
+
+### Reading mail and notifications
+
+| Requirement | Status | Notes |
+|---|---|---|
+| Log in from the mobile app and the web client | ✅ | Phone + OTP, JWT session. |
+| SMS *"You have received an email from &lt;Sender&gt;. Subject: &lt;Subject&gt;."* for users without the app | ✅ built, 🟡 not live | Sent only when the user has never used the mobile app. On Twilio trial accounts it falls back to a predefined template, as the brief allows. |
+| Receiving email | ✅ | Local SMTP server → per-user mailbox with attachments. Unknown users are rejected with `550`. |
+
+### Mobile client
+
+| Requirement | Status | Notes |
+|---|---|---|
+| WhatsApp design language | 🟡 | WhatsApp-style chat list, message bubbles, swipe gestures and header actions; not every screen has had a final design review. |
+| Screen 1: language selection | ✅ | English, தமிழ், हिन्दी; device language pre-selected; changeable later. |
+| Screen 2: Terms & Conditions | ✅ | "Agree & continue". |
+| Screen 3: phone number auto-detected and editable | ✅ | Android: Google Phone Number Hint (needs a development build). Expo Go / iPhone: typed. |
+| Screen 4: OTP auto-detected and verified | 🟡 | OS one-time-code autofill and auto-submit on 6 digits. Fully silent Android SMS reading (SMS Retriever) not wired up. |
+| Permissions requested at the right onboarding step | ❌ | See §5. |
+| Compose button bottom-right (traditional view) | ✅ | |
+| Chat view: search a number and start typing | ✅ | "Start a chat with …" appears for a typed number or address. |
+| No separate Inbox/Sent: everything is chats | ✅ | |
+| Full-width search, chips **All / Unread / Attachments / Favorites** | ✅ | |
+| Top-left menu: Home, Drafts, Spam, Trash | ✅ | |
+| Profile icon top-right → settings: alias IDs, language, details, photo | ✅ | Up to 5 alias IDs (receive-only), name, photo, language, theme. |
+| Compact Subject field above the message box, hidden when replying | ✅ | |
+| Same sender stays in one chat | ✅ | |
+| Swipe right to reply / tag the original message | ✅ | Long-press works too. |
+| Each message can be replied to only once | ✅ | Replied messages show "Replied". |
+| Long email → tap for traditional view, Reply at the bottom | ✅ | |
+| Traditional compose inside a chat with **locked** To (camera-tab spot) | ✅ | No Cc/Bcc, To cannot be changed. |
+| 2+ recipients from Home → new **group chat** | ❌ | See §5. |
+| *Extra:* PhoneMail ID card with QR code | ✅ | Scan to open that person's card → Email / Chat / Share. |
+
+### Web client
+
+| Requirement | Status | Notes |
+|---|---|---|
+| One screen: phone, OTP, one **Next** button, "By signing up, you agree to the Terms of Service" link | ✅ | |
+| Gmail-like interface | ✅ | Folders, tabs, search with filters, reader, compose window, labels, stars, snooze, bulk actions. |
+| Profile and Settings | ✅ | Photo, name, phone, address, alias IDs, language, theme, sign out. |
+| Responsive | ✅ | Desktop three-pane, tablet two-pane, phone single-pane with floating Compose; light and dark. |
+| Saving drafts | 🟡 | Drafts folder exists in the backend; the compose windows don't save drafts yet. |
+
+### Platform
+
+| Requirement | Status | Notes |
+|---|---|---|
+| Backend in Node.js / Go | ✅ | Node.js (NestJS). |
+| Everything dockerized, `docker compose up -d` | ✅ | Postgres, backend, mail server, web. The mobile app runs through Expo (§5). |
+| README documentation | ✅ | This file. |
+| *Good to have:* OTP login, accessibility, responsiveness, security | ✅ | See [Security](#10-security); ARIA labels and keyboard navigation in the web client. |
+
+---
+
+## 5. What is not done, and why
+
+| Item | Why | What it would take |
+|---|---|---|
+| **Live SMS, live OTP by SMS and live IVR calls** | The Twilio trial ran out. The account was upgraded, but Twilio blocks every API call (`401`, error `20003`) until the **Trust Hub (KYC) profile is approved**, which can take a few days. SMS to Indian numbers may also need DLT sender registration. | No code changes. After approval, set `TWILIO_FROM_NUMBER`, point the number's webhooks at the backend (§8) and restart. All flows are covered by automated tests, and `npm run twilio:webhook` exercises the IVR locally. |
+| **Password login** | The brief asks for it only when no free OTP provider is available. OTP works with Twilio, and without Twilio the backend prints codes to its log (free and good for demos). A second login method would add attack surface without adding a feature. | A password field and a bcrypt hash on `User`. |
+| **Onboarding permission prompts** | The two detections in the brief need no runtime permission on modern Android: Phone Number Hint is a Google Play Services picker, and one-time-code autofill is handled by the OS. Contacts access is only useful once there's a contact picker in compose, which isn't built yet. | Add `expo-contacts` with a picker in compose and request access on first use. |
+| **Silent OTP reading (SMS Retriever)** | Needs a development build (not Expo Go) and a real SMS containing the app hash. Real SMS is blocked (see first row). Autofill + auto-submit already covers the user-visible part. | Native module + `ANDROID_SMS_APP_HASH` (already appended to the SMS when set). |
+| **Group chats (2+ recipients)** | Needs conversations keyed by the set of participants, plus matching rules for replies from each member. 1:1 chats were prioritised because every mail uses them. | A `Conversation` table and grouping by participant set in `shared/mail`. |
+| **Drafts from the apps** | Time; sending, receiving and sign-up were prioritised. The backend already stores drafts. | Autosave from the compose screens to the Drafts folder. |
+| **Mobile app in Docker** | A phone app can't run in a container; it runs on the phone through Expo Go or an installed build. | `eas build` for an installable APK. |
+| **Internet mail to `@phonemail.com`** | `phonemail.com` is not our domain, so the internet delivers its mail elsewhere. Receiving works locally through `mail-server`. | Own a domain, add an MX record pointing to a public `mail-server` (port 25) or to an inbound-email service that posts to `/mail/inbound`. Sending from an own domain already works (§9). |
+| **Full Tamil/Hindi translation** | Sign-up, the app frame and settings are translated; inner screens (chat, reader, compose) are still English. | Move remaining strings into `shared/i18n/strings.ts`. |
+
+---
+
+## 6. Configuration
+
+### Docker (`.env` next to `docker-compose.yml`, optional)
+
+Copy `.env.example` to `.env` and change only what you need.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `MAIL_DOMAIN` | `phonemail.com` | Domain of every address (`<number>@MAIL_DOMAIN`) |
+| `BACKEND_HOST_PORT`, `WEB_HOST_PORT`, `SMTP_HOST_PORT` | `3000`, `8080`, `2525` | Host ports |
+| `JWT_SECRET` | random at start | Signs sessions. **Set it** to keep users signed in across restarts |
+| `INBOUND_SECRET` | `change-me` | Shared secret between `mail-server` and backend. Change it in production |
+| `EMAIL_API_KEY` | empty | Enables server-to-server `POST /email/send` with `x-api-key`; empty = disabled in production |
+| `SMS_LOG_FALLBACK` | `true` | When Twilio isn't configured, print SMS/OTP text to the log instead of failing. **Set `false` in real production** |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | empty | Relay for mail to non-PhoneMail addresses. Empty = only PhoneMail-to-PhoneMail mail works |
+| `MAIL_FROM` | empty | Sender for API-key sends only; signed-in users always send as themselves |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | empty | SMS, voice OTP, IVR. See §8 |
+| `TWILIO_WEBHOOK_BASE_URL` | empty | Public URL Twilio calls (used to check webhook signatures) |
+| `TWILIO_VERIFY_SERVICE_SID` / `TWILIO_MESSAGING_SERVICE_SID` | empty | Optional: Twilio Verify for OTP / a Messaging Service as sender |
+| `OTP_CHANNEL` | `sms` | `voice` = Twilio calls the user and reads the code |
+| `TWILIO_TRIAL_SMS_TEMPLATE` | `sms_account_alerts` | Predefined template used when a trial account blocks custom text |
+
+### Local development
+
+- `backend/.env`: copy `backend/.env.example` (same variables plus `DATABASE_URL`, `PORT`, `ACCOUNT_PHONE`).
+- `mail-server/.env`: copy `mail-server/.env.example`; `MAIL_DOMAIN` and `INBOUND_SECRET` **must match** `backend/.env`, otherwise every incoming message is rejected (`451`).
+- Mobile: `EXPO_PUBLIC_API_URL` (default `http://<Expo host>:3000`), `EXPO_PUBLIC_MAIL_DOMAIN`.
+
+---
+
+## 7. Local development (without Docker)
+
+Requirements: Node.js 22, PostgreSQL 16+.
+
+```sh
+# 1. Backend: http://localhost:3000
+cd backend
+cp .env.example .env          # set DATABASE_URL, MAIL_DOMAIN, JWT_SECRET …
+npm install
+npm run db:migrate
+npm run start:dev             # OTP codes are printed here while Twilio is not configured
+
+# 2. Mail server: SMTP on :2525
+cd mail-server
+cp .env.example .env          # same MAIL_DOMAIN and INBOUND_SECRET as backend/.env
+npm install
+npm run dev
+
+# 3. Web client: http://localhost:5173 (proxies /api to the backend)
+cd web
+npm install
+npm run dev
+```
+
+### Mobile app
+
+```sh
+cd mobile
+npm install
+npx expo start                # scan the QR code with Expo Go (Android/iOS)
+```
+
+The phone must be on the same Wi-Fi as the computer. The app looks for the backend on the Expo
+host at port 3000; if that doesn't work (e.g. with Docker on another port), start it with
+`EXPO_PUBLIC_API_URL=http://<your-computer-LAN-IP>:3000 npx expo start`. SIM number detection
+(Phone Number Hint) needs a development build: `npx expo run:android`.
+
+---
+
+## 8. Twilio: OTP, SMS alerts, IVR and SMS sign-up
+
+| Feature | Endpoint / trigger | Needs |
+|---|---|---|
+| OTP by SMS | `POST /auth/otp/request` | SID, token, `TWILIO_FROM_NUMBER` (or Verify / Messaging Service) |
+| OTP by voice call | same, with `OTP_CHANNEL=voice` | SID, token, voice-capable `TWILIO_FROM_NUMBER` |
+| New-mail SMS alert | on every received email, for users without the app | as OTP by SMS |
+| IVR sign-up | Twilio → `POST /twilio/voice`, `/twilio/voice/menu`, `/number`, `/verify` | public URL + number webhook |
+| SMS sign-up (`JOIN`) | Twilio → `POST /twilio/sms` | public URL + number webhook |
+
+### IVR call flow
+
+| Caller does | Backend replies |
+|---|---|
+| Calls the number | "Welcome to PhoneMail… Press 1 to create an account. Press 2 to hear the options again." |
+| Presses 2 | Menu again |
+| Presses anything else | "Invalid option. Please try again." + menu |
+| Presses 1 (Indian caller ID) | Creates the account (or says one already exists), reads the address twice, "You will receive a confirmation message shortly. Goodbye.", hangs up, sends the confirmation SMS |
+| Presses 1 (hidden/foreign caller ID) | Asks for the 10-digit number, texts a code, verifies it, then as above |
+
+Errors never crash the call: a failed SMS is logged, and a database error ends the call with an apology.
+
+### Connect a Twilio number
+
+1. Start the backend and expose it: `ngrok http 3000`.
+2. Set `TWILIO_WEBHOOK_BASE_URL=https://<id>.ngrok-free.app` and `TWILIO_FROM_NUMBER=<your Twilio number>`, then restart.
+3. Twilio Console → Phone Numbers → your number:
+   Voice *A call comes in* → `POST https://<id>.ngrok-free.app/twilio/voice`;
+   Messaging *A message comes in* → `POST https://<id>.ngrok-free.app/twilio/sms`.
+4. Call the number and press 1, or text `JOIN`.
+
+### Test the IVR without a phone call
 
 ```sh
 cd backend
-cp .env.example .env        # set DATABASE_URL, SMTP_*, ACCOUNT_PHONE, MAIL_DOMAIN
-npm run db:migrate          # create/update tables (prisma/schema.prisma)
-npm run start:dev           # regenerates the Prisma client first
-```
-
-Tables: `User` (phone, email), `Message` (subject, body, status `PENDING` → `SENT`/`FAILED`,
-SMTP Message-ID/response or error), `Recipient` (email, `TO`/`CC`/`BCC`), `Attachment`
-(metadata only). `npm run db:studio` opens a browser view of the data. In Docker the backend
-runs `prisma migrate deploy` on start.
-
-## Phone sign-in (SMS OTP)
-
-The phone number is the account: `9876543210` → `+919876543210` (stored, E.164 only) →
-mailbox `9876543210@phonemail.com`. Signing in again with the same number returns the same
-account. India (+91, 10-digit mobiles starting 6–9) only for now.
-
-| Endpoint | Body | Result |
-| --- | --- | --- |
-| `POST /auth/otp/request` | `{"phone":"9876543210","countryCode":"+91"}` | `{"success":true,"phone":"+919876543210","expiresIn":300,"resendIn":30}` |
-| `POST /auth/otp/verify` | `{"phone":"9876543210","code":"123456"}` | `{"accessToken":"…","isNewUser":true,"user":{…},"account":{…}}` |
-| `GET /auth/me` | `Authorization: Bearer <token>` | current user + account |
-
-- Codes: 6 digits, valid 5 minutes, one active per number, stored only as an HMAC.
-  Limits: 30 s between requests, 5 requests/hour, 5 wrong attempts per code (then `429`).
-- Tokens: JWT (`JWT_SECRET`, `JWT_EXPIRES_IN_DAYS`, default 30). With a token,
-  `/email/send` sends as the user's own address, `/messages` shows only their mail, and
-  `/account` describes their mailbox. `EMAIL_API_KEY` still works for server-to-server calls.
-- SMS: Twilio (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, plus either `TWILIO_VERIFY_SERVICE_SID`
-  for Twilio Verify, which works on trial accounts, or `TWILIO_MESSAGING_SERVICE_SID` /
-  `TWILIO_FROM_NUMBER` for our own message text). **Without them (dev only) the code is printed in the backend log.**
-- Mobile: `sign-in` → `verify` screens (Expo Router). The code field uses the OS one-time-code
-  autofill (Android autofill service / iOS "From Messages"), submits itself when 6 digits
-  arrive, and supports paste and manual entry. The token is kept in `expo-secure-store`.
-  Fully automatic Android reading via the SMS Retriever API needs a development build and
-  `ANDROID_SMS_APP_HASH` (appended to the SMS).
-
-### OTP by voice call
-
-Set `OTP_CHANNEL=voice` to have Twilio **call** the user and read the 6-digit code aloud (twice)
-instead of texting it. It needs `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and a voice-capable
-`TWILIO_FROM_NUMBER` on that account, and no public URL (the call script is sent with the request).
-Useful on a Twilio trial, where custom SMS is blocked and Verify's free units run out: trial voice
-minutes still work for verified numbers. The apps show "We’re calling you…" for this channel.
-
-## Sign-up by phone call (IVR) and SMS
-
-Users without a smartphone can create an account through the Twilio number:
-
-- **Call** it and press **1**. The account is created for the caller's number, the address is
-  read out twice, and it is also sent by SMS. If caller ID is missing or not an Indian mobile,
-  the caller types their number on the keypad and confirms it with a 6-digit SMS code.
-- **Text** `JOIN` to it. The reply contains the new address.
-
-These users have no app, so they get an SMS for every new email.
-
-### Call flow
-
-| Step | Endpoint | What happens |
-|---|---|---|
-| Call comes in | `POST /twilio/voice` | Menu: "Press 1 to create an account. Press 2 to hear the options again." (`<Gather numDigits="1">`). No key → goodbye. |
-| Key pressed | `POST /twilio/voice/menu` | `2` → menu again. Anything else except `1` → "Invalid option. Please try again." + menu. |
-| `1`, caller ID is an Indian mobile | `POST /twilio/voice/menu` | `From` is normalised to `+91XXXXXXXXXX`. New number → account created, "Your registration was successful…". Known number → "An account already exists for this number…", no second account. Address read twice, "You will receive a confirmation message shortly. Goodbye.", hang up. |
-| `1`, caller ID missing/hidden/foreign | `POST /twilio/voice/number`, then `POST /twilio/voice/verify` | Caller types their 10-digit number and the 6-digit code sent to it by SMS; then as above. The code is stored only as a hash. |
-
-- One account per number: `User.phone` and `User.email` are unique in Postgres, so concurrent
-  calls from the same number create one account (the others are told it already exists).
-- The confirmation SMS is sent in the background. If it fails (e.g. Twilio blocked), the
-  failure is logged and the call still ends normally.
-- If the database fails, the caller hears "Sorry, we could not create your account right
-  now…" and the call ends; the error is logged, not spoken.
-
-On a Twilio **trial** account custom SMS text is blocked (error 572006); only Twilio's predefined
-templates can be sent. New-email alerts and sign-up confirmations then fall back to the template
-named in `TWILIO_TRIAL_SMS_TEMPLATE` (default `sms_account_alerts`; others include
-`sms_event_notifications`, `sms_2fa`). OTPs are unaffected: Twilio Verify uses its own template.
-
-### Environment variables (`backend/.env`)
-
-| Variable | Used for |
-|---|---|
-| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` | Sending SMS/calls; the token also checks webhook signatures. Never sent to the apps or logged. |
-| `TWILIO_FROM_NUMBER` | Number the confirmation SMS is sent from. Empty (dev only) → SMS and OTPs are printed in the backend log instead. |
-| `TWILIO_WEBHOOK_BASE_URL` | Public URL Twilio calls, e.g. `https://abc123.ngrok-free.app`. Needed for signature checks behind a tunnel. |
-| `TWILIO_VERIFY_SERVICE_SID`, `TWILIO_MESSAGING_SERVICE_SID` | Optional, unchanged. |
-
-### Testing the call flow locally (no real call)
-
-Start the backend (`cd backend`, `npm run start:dev`), then in a second terminal:
-
-```powershell
-cd backend
 npm run twilio:webhook -- /twilio/voice From=+919876543210
-npm run twilio:webhook -- /twilio/voice/menu From=+919876543210 Digits=2
-npm run twilio:webhook -- /twilio/voice/menu From=+919876543210 Digits=7
 npm run twilio:webhook -- /twilio/voice/menu From=+919876543210 Digits=1
 npm run twilio:webhook -- /twilio/sms From=+919876543210 Body=JOIN
 ```
 
-The script sends the same form fields Twilio would, signed with your `TWILIO_AUTH_TOKEN`, to
-`localhost`, and prints the TwiML the backend returns. It is a local HTTP request only; no call is
-placed. (In Git Bash, prefix it with `MSYS_NO_PATHCONV=1` so `/twilio/...` isn't turned into a
-Windows path.) `Digits=1` creates a real account in your dev database. The automated tests cover
-the same flow: `npm run test:e2e -- telephony`.
+This sends the same signed form fields Twilio would to the local backend and prints the TwiML
+reply. No call is placed. (Git Bash: prefix with `MSYS_NO_PATHCONV=1`.)
 
-Every request must carry a valid `X-Twilio-Signature` when `TWILIO_AUTH_TOKEN` is set. Without a
-token (development only) unsigned requests are accepted, so plain `curl -X POST
-localhost:3000/twilio/voice/menu -d From=+919876543210 -d Digits=1` also works.
+---
 
-### Connecting the Twilio number
+## 9. Sending from your own domain
 
-Needs an active Twilio account with an approved Trust Hub (KYC) profile.
+Gmail SMTP rewrites the From address to the Gmail account, so for mail that really comes from
+`<number>@yourdomain` use a provider that verifies your domain. With **Resend** (free tier):
 
-1. Start the backend: `cd backend`, `npm run start:dev` (port 3000).
-2. Start a tunnel: `ngrok http 3000`. Copy the `https://….ngrok-free.app` URL it prints.
-3. Put it in `backend/.env` as `TWILIO_WEBHOOK_BASE_URL=https://….ngrok-free.app` (no trailing
-   slash) and restart the backend. The free ngrok URL changes every time ngrok restarts; update
-   both this and step 4 when it does.
-4. Twilio Console → Phone Numbers → Manage → Active numbers → your number:
-   - Voice → *A call comes in* → Webhook, `https://….ngrok-free.app/twilio/voice`, HTTP `POST`
-   - Messaging → *A message comes in* → Webhook, `https://….ngrok-free.app/twilio/sms`, HTTP `POST`
-   - Save.
-5. Set `TWILIO_FROM_NUMBER` to that number so the confirmation SMS is really sent.
-6. Call the number from an Indian mobile and press 1.
+1. Add a subdomain such as `mail.example.com` in Resend and add the DNS records it shows (DKIM,
+   SPF/bounce MX) plus `TXT _dmarc → v=DMARC1; p=none;` at your DNS provider. Wait for **Verified**.
+2. Configure the backend:
+   ```
+   MAIL_DOMAIN=mail.example.com
+   SMTP_HOST=smtp.resend.com
+   SMTP_PORT=465
+   SMTP_SECURE=true
+   SMTP_USER=resend
+   SMTP_PASS=<Resend API key>
+   ```
+3. Use the same `MAIL_DOMAIN` for `mail-server`.
+4. Accounts created under the old domain keep their stored address; update `User.email`
+   (`npm run db:studio`) so they send from the new one.
 
-If Twilio's debugger shows 403 on the webhook, the signature check failed: `TWILIO_WEBHOOK_BASE_URL`
-doesn't match the URL configured on the number, or `TWILIO_AUTH_TOKEN` is from another account.
+This setup has been tested end to end: a message sent through Resend from a verified subdomain was
+delivered to Gmail with the PhoneMail address as sender.
 
-## Sending email (`POST /email/send`)
+---
 
-Each send is saved as `PENDING` before SMTP, then marked `SENT` or `FAILED` (the error is
-kept). `GET /messages` lists sent messages with status and recipients; `GET /messages/:id`
-returns one. If the database is down, nothing is sent (`503`).
+## 10. Security
 
-The backend sends through an SMTP relay using Nodemailer (`backend/src/email`).
-Configure it in `backend/.env` (copy `backend/.env.example`): `SMTP_HOST`, `SMTP_PORT`,
-`SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`, `EMAIL_API_KEY`.
+- **Passwordless login:** 6-digit OTP, valid 5 minutes, one active code per number. Stored only as
+  an HMAC, never in plain text. Limits: 30 s between requests, 5 per hour, 5 wrong attempts.
+- **Sessions:** signed JWT; mobile stores it in the OS secure store.
+- **Per-user data:** every mailbox query is scoped to the signed-in user.
+- **Twilio webhooks:** every request must carry a valid `X-Twilio-Signature` (HMAC-SHA1 with the auth
+  token, compared in constant time); forged or altered requests get `403`.
+- **Inbound mail:** `mail-server` refuses to relay for other domains (`550`) and authenticates to the
+  backend with a shared secret.
+- **No sender spoofing:** signed-in users always send as their own address.
+- **Secrets:** read only from environment variables, never logged or returned by the API; `.env`
+  files are excluded from git and Docker builds.
+- **Safe failure:** in production, if Twilio isn't configured and `SMS_LOG_FALLBACK` isn't enabled,
+  SMS requests fail instead of printing codes to the log.
 
-```sh
-curl -X POST http://localhost:3000/email/send \
-  -H "content-type: application/json" -H "x-api-key: $EMAIL_API_KEY" \
-  -d '{"to":"rahul@gmail.com","subject":"Hello Rahul","body":"Meeting is at 10 AM"}'
-# -> 200 {"success":true,"message":"Email sent successfully","id":"…","messageId":"<…>","accepted":["rahul@gmail.com"],"rejected":[],"response":"250 …"}
-```
+---
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `to` | string or string[] | required, 1–50 addresses |
-| `cc`, `bcc` | string or string[] | optional, up to 50 |
-| `replyTo` | string | optional |
-| `subject` | string | required |
-| `body` / `text` / `html` | string | at least one required (`body` = alias for `text`) |
-
-`from` is always `MAIL_FROM` (callers can't spoof it). Errors: `400` invalid body,
-`401` bad/missing API key, `502` relay refused or unreachable, `503` SMTP not configured.
-`GET /email/status` runs a live connection check. The SMTP connection is also checked at
-startup and logged; a failing relay doesn't stop the backend from booting.
-
-## Web
-
-- `/` — sign in with phone number + SMS code on one screen (one **Next** button, Terms of Service
-  link above it). The session token is kept in `localStorage`; an expired token returns to sign-in.
-- `/register` — registration portal: phone + code only. It creates the account, shows the new
-  address and resets the form for the next person without signing in.
-- `/terms` — Terms of Service.
-- Profile & settings (gear icon or account menu): photo, name, alias IDs, language
-  (English / Tamil / Hindi, shared with the mobile app from `shared/i18n`), theme, sign out.
-
-## Colors / theme
-
-All colors live in [`shared/theme/colors.ts`](shared/theme/colors.ts): a raw `palette`
-plus semantic `lightColors` / `darkColors` tokens (`background`, `surface`, `text`,
-`primary`, …). Change a color there and every app picks it up.
-
-- **web** imports it as `@shared/theme`; `src/theme/cssVars.ts` turns each token into a
-  CSS variable (`textMuted` → `--color-text-muted`) for light and dark. CSS uses only
-  `var(--color-*)`, never hex values.
-- **mobile** imports the same tokens via `useTheme()` (`src/theme/ThemeProvider.tsx`).
-
-`shared/mail` holds the mail types, API client, folder filters and formatting helpers
-used by both apps.
-
-## Mobile
-
-Expo Router app (`mobile/src/app`): inbox with search + folder chips, message reader
-(HTML mail in a WebView), and settings (theme). `@shared/*` resolves via
-`mobile/metro.config.js`.
+## 11. Testing
 
 ```sh
-cd mobile && npm start      # scan the QR code with Expo Go
+cd backend
+npm test            # 28 unit tests
+npm run test:e2e    # 92 end-to-end tests (needs Postgres; uses database phonemail_test)
+npm run lint
+
+cd ../web && npx tsc -b && npm run build
+cd ../mobile && npx tsc --noEmit && npx expo lint
+cd ../mail-server && npx tsc --noEmit
 ```
 
-The app finds the backend on the same host as the Expo dev server (port 3000), so a
-phone on the same Wi-Fi works as-is. Set `EXPO_PUBLIC_API_URL` to use another server.
+End-to-end tests cover OTP sign-in and limits, per-user mailboxes, inbound delivery, aliases,
+account settings, IVR (menu, press 1/2/invalid, existing users, concurrent calls, missing or
+invalid caller ID, SMS and database failures, signature checks) and SMS sign-up.
 
-## Docker
+---
 
-```sh
-cp .env.example .env
-docker compose up --build
+## 12. API reference
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `POST /auth/otp/request` | – | `{"phone":"9876543210","countryCode":"+91"}` → code sent |
+| `POST /auth/otp/verify` | – | `{"phone","code"}` → `{accessToken, user, account, isNewUser}` |
+| `GET /auth/me` | JWT | Current user and account |
+| `GET /mail` | JWT | All messages in the user's mailbox |
+| `PATCH /mail/:id` · `DELETE /mail/:id` | JWT | Read/star/folder/labels/snooze · delete |
+| `POST /email/send` | JWT or `x-api-key` | `{to, cc?, bcc?, subject, text?/html?, inReplyTo?, attachments?}` |
+| `GET /email/status` | – | Live SMTP relay check |
+| `GET /account` · `PATCH /account` | JWT | Profile (name) |
+| `GET/PUT/DELETE /account/avatar` | JWT | Profile photo |
+| `GET /mail/:id/attachments/:index` | JWT | Download an attachment |
+| `POST /account/aliases` · `DELETE /account/aliases/:name` | JWT | Alias IDs (max 5) |
+| `GET /labels` · `POST /labels` | JWT | Labels |
+| `POST /mail/inbound` | `x-inbound-secret` | Used by `mail-server` |
+| `POST /twilio/voice`, `/twilio/voice/menu`, `/number`, `/verify`, `/twilio/sms` | Twilio signature | IVR and SMS sign-up webhooks |
+
+Errors use standard HTTP codes: `400` invalid input, `401` missing/expired session, `403` bad
+signature, `429` rate limited, `502` SMTP/Twilio refused, `503` service not configured.
+
+---
+
+## 13. Project structure
+
 ```
-
-Starts Postgres (5432), backend (3000), mail-server (2525), and web (8080). The mobile
-app runs outside Docker via Expo.
+phonemailer/
+├── backend/          NestJS API: auth (OTP, JWT), mail, email (SMTP), account, telephony (Twilio)
+│   ├── prisma/       schema.prisma + migrations
+│   ├── scripts/      twilio-webhook.mjs (local IVR testing)
+│   └── test/         end-to-end tests
+├── mail-server/      SMTP server for incoming mail → POST /mail/inbound
+├── web/              React + Vite web client (nginx in Docker)
+├── mobile/           Expo / React Native app (Expo Router, src/app = screens)
+├── shared/           Code shared by web and mobile: mail API client & types, i18n, icons, theme
+├── data/             Buildathon brief (Task + slides)
+├── docker-compose.yml
+└── .env.example
+```

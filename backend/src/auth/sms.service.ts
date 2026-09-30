@@ -7,6 +7,10 @@ import {
 
 export const TRIAL_TEMPLATE_ERROR = 572006;
 
+export const logFallbackAllowed = () =>
+  process.env.NODE_ENV !== 'production' ||
+  process.env.SMS_LOG_FALLBACK === 'true';
+
 export interface SendOptions {
   trialFallback?: boolean;
 }
@@ -40,7 +44,7 @@ export class SmsService {
     options: SendOptions = {},
   ): Promise<void> {
     if (!this.configured) {
-      if (process.env.NODE_ENV === 'production') {
+      if (!logFallbackAllowed()) {
         throw new ServiceUnavailableException('SMS is not configured');
       }
       this.logger.warn(`Twilio not configured. SMS to ${to}: ${body}`);

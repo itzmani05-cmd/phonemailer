@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { pause, response, say } from '../telephony/twiml';
+import { logFallbackAllowed } from './sms.service';
 
 export const codeTwiml = (code: string) => {
   const spoken = code.split('').join(', ');
@@ -31,7 +32,7 @@ export class VoiceCallService {
 
   async speakCode(to: string, code: string): Promise<void> {
     if (!this.configured) {
-      if (process.env.NODE_ENV === 'production') {
+      if (!logFallbackAllowed()) {
         throw new ServiceUnavailableException('Voice calls are not configured');
       }
       this.logger.warn(`Twilio not configured. Call to ${to}: code ${code}`);

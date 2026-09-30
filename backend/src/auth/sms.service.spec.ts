@@ -1,4 +1,8 @@
-import { BadGatewayException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { SmsService, TRIAL_TEMPLATE_ERROR } from './sms.service';
 
 type Call = { body: URLSearchParams };
@@ -70,6 +74,33 @@ describe('SmsService', () => {
       new SmsService().send('+919876543210', '123456 is your code'),
     ).rejects.toBeInstanceOf(BadGatewayException);
     expect(calls).toHaveLength(1);
+  });
+
+  describe('without Twilio', () => {
+    beforeEach(() => {
+      process.env.TWILIO_FROM_NUMBER = '';
+      process.env.NODE_ENV = 'production';
+    });
+
+    it('refuses in production so codes are never logged by accident', async () => {
+      delete process.env.SMS_LOG_FALLBACK;
+      await expect(
+        new SmsService().send('+919876543210', '123456 is your code'),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      expect(calls).toHaveLength(0);
+    });
+
+    it('logs instead of sending when SMS_LOG_FALLBACK=true', async () => {
+      process.env.SMS_LOG_FALLBACK = 'true';
+      const warn = jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => {});
+      await new SmsService().send('+919876543210', '123456 is your code');
+      expect(calls).toHaveLength(0);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('123456 is your code'),
+      );
+    });
   });
 
   it('fails when the template is rejected too', async () => {
