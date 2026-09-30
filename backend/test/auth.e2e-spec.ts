@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { SmsService } from '../src/auth/sms.service';
 import { TwilioVerifyService } from '../src/auth/verify.service';
+import { VoiceCallService } from '../src/auth/voice-call.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 class FakeSms {
@@ -23,6 +24,14 @@ class FakeSms {
     const msg = [...this.sent].reverse().find((m) => m.to === to);
     if (!msg) throw new Error(`no SMS to ${to}`);
     return /\b(\d{6})\b/.exec(msg.body)![1];
+  }
+}
+
+class FakeVoice {
+  calls: { to: string; code: string }[] = [];
+  speakCode(to: string, code: string) {
+    this.calls.push({ to, code });
+    return Promise.resolve();
   }
 }
 
@@ -64,6 +73,7 @@ describe('Phone sign-in (e2e)', () => {
   let jwt: JwtService;
   const sms = new FakeSms();
   const verify = new FakeVerify();
+  const voice = new FakeVoice();
 
   const api = () => request(app.getHttpServer());
   const requestOtp = (phone = PHONE, extra = {}) =>
@@ -88,6 +98,8 @@ describe('Phone sign-in (e2e)', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(SmsService)
       .useValue(sms)
+      .overrideProvider(VoiceCallService)
+      .useValue(voice)
       .overrideProvider(TwilioVerifyService)
       .useValue(verify)
       .compile();
@@ -103,6 +115,8 @@ describe('Phone sign-in (e2e)', () => {
     sms.sent = [];
     sms.fail = false;
     Object.assign(verify, { configured: false, fail: false, checks: 0 });
+    voice.calls = [];
+    delete process.env.OTP_CHANNEL;
     verify.codes.clear();
     await prisma.$executeRawUnsafe(
       'TRUNCATE "OtpCode", "Recipient", "Attachment", "Message", "User" CASCADE',
@@ -121,6 +135,7 @@ describe('Phone sign-in (e2e)', () => {
       expect(res.body).toEqual({
         success: true,
         phone: E164,
+        channel: 'sms',
         expiresIn: 300,
         resendIn: 30,
       });
@@ -292,6 +307,38 @@ describe('Phone sign-in (e2e)', () => {
       await requestOtp().expect(200);
       await verifyOtp(sms.lastCode(E164), '9123456789').expect(400);
     });
+  });
+
+  describe('with OTP_CHANNEL=voice', () => {
+    beforeEach(() => {
+      process.env.OTP_CHANNEL = 'voice';
+    });
+
+    it('calls the number with the code instead of texting it', async () => {
+      const res = await requestOtp().expect(200);
+      expect((res.body as { channel: string }).channel).toBe('voice');
+      expect(voice.calls).toHaveLength(1);
+      expect(voice.calls[0].to).toBe(E164);
+      expect(voice.calls[0].code).toMatch(/^\d{6}$/);
+      expect(sms.sent).toHaveLength(0);
+    });
+
+    it('signs in with the code read out on the call', async () => {
+      await requestOtp().expect(200);
+      await verifyOtp(voice.calls[0].code).expect(200);
+    });
+
+    it('prefers voice even when Twilio Verify is configured', async () => {
+      verify.configured = true;
+      await requestOtp().expect(200);
+      expect(voice.calls).toHaveLength(1);
+      expect(verify.codes.size).toBe(0);
+    });
+  });
+
+  it('reports the sms channel by default', async () => {
+    const res = await requestOtp().expect(200);
+    expect((res.body as { channel: string }).channel).toBe('sms');
   });
 
   describe('with Twilio Verify', () => {

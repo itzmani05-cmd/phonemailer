@@ -16,6 +16,28 @@ sender MTA ──SMTP──▶ mail-server ──POST /mail/inbound──▶ bac
 `mail-server` parses each message and forwards it as JSON, authenticated with the
 `x-inbound-secret` header (`INBOUND_SECRET`). Fetch received mail with `GET /mail`.
 
+Run locally: `cd mail-server`, `cp .env.example .env`, then set `MAIL_DOMAIN` and
+`INBOUND_SECRET` to the same values as in `backend/.env` (otherwise the backend rejects every
+message with 401 and senders get `451`), and `npm run dev`.
+
+## Sending with your own domain
+
+Outgoing mail to Gmail etc. is sent over SMTP with the user's own address as From
+(`<number>@MAIL_DOMAIN`). Gmail SMTP rewrites that From, so use a provider that lets you verify
+the domain, e.g. Resend:
+
+1. Add the domain (e.g. `mail.example.com`) in Resend and add its DNS records (DKIM, SPF/bounce
+   MX, plus a DMARC TXT `v=DMARC1; p=none;`) at your DNS provider; wait for **Verified**.
+2. In `backend/.env`: `MAIL_DOMAIN=mail.example.com`, `SMTP_HOST=smtp.resend.com`,
+   `SMTP_PORT=465`, `SMTP_SECURE=true`, `SMTP_USER=resend`, `SMTP_PASS=<Resend API key>`,
+   `MAIL_FROM=` (empty: falls back to `ACCOUNT_PHONE@MAIL_DOMAIN`).
+3. Use the same `MAIL_DOMAIN` in `mail-server/.env`.
+4. Accounts created before the change keep their old stored address; update `User.email`
+   (e.g. in `npm run db:studio`) so they send from the new domain.
+
+Receiving internet mail at that domain additionally needs an MX record pointing to a public
+mail-server (or an inbound-email service forwarding to `POST /mail/inbound`).
+
 ## Backend setup (PostgreSQL + Prisma)
 
 ```sh
@@ -56,6 +78,14 @@ account. India (+91, 10-digit mobiles starting 6–9) only for now.
   Fully automatic Android reading via the SMS Retriever API needs a development build and
   `ANDROID_SMS_APP_HASH` (appended to the SMS).
 
+### OTP by voice call
+
+Set `OTP_CHANNEL=voice` to have Twilio **call** the user and read the 6-digit code aloud (twice)
+instead of texting it. It needs `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and a voice-capable
+`TWILIO_FROM_NUMBER` on that account, and no public URL (the call script is sent with the request).
+Useful on a Twilio trial, where custom SMS is blocked and Verify's free units run out: trial voice
+minutes still work for verified numbers. The apps show "We’re calling you…" for this channel.
+
 ## Sign-up by phone call (IVR) and SMS
 
 Users without a smartphone can create an account through the Twilio number:
@@ -67,22 +97,77 @@ Users without a smartphone can create an account through the Twilio number:
 
 These users have no app, so they get an SMS for every new email.
 
-Connecting a Twilio number (needs Twilio credit; trial accounts only accept verified callers):
+### Call flow
 
-1. Expose the backend publicly, e.g. `ngrok http 3000` or `cloudflared tunnel --url http://localhost:3000`.
-2. Set `TWILIO_WEBHOOK_BASE_URL` to that URL (e.g. `https://abc123.ngrok.app`) and restart the
-   backend. It is used to check Twilio's request signatures.
-3. In the Twilio console, open the phone number and set
-   - Voice → *A call comes in* → Webhook, `POST https://<url>/twilio/voice`
-   - Messaging → *A message comes in* → Webhook, `POST https://<url>/twilio/sms`
+| Step | Endpoint | What happens |
+|---|---|---|
+| Call comes in | `POST /twilio/voice` | Menu: "Press 1 to create an account. Press 2 to hear the options again." (`<Gather numDigits="1">`). No key → goodbye. |
+| Key pressed | `POST /twilio/voice/menu` | `2` → menu again. Anything else except `1` → "Invalid option. Please try again." + menu. |
+| `1`, caller ID is an Indian mobile | `POST /twilio/voice/menu` | `From` is normalised to `+91XXXXXXXXXX`. New number → account created, "Your registration was successful…". Known number → "An account already exists for this number…", no second account. Address read twice, "You will receive a confirmation message shortly. Goodbye.", hang up. |
+| `1`, caller ID missing/hidden/foreign | `POST /twilio/voice/number`, then `POST /twilio/voice/verify` | Caller types their 10-digit number and the 6-digit code sent to it by SMS; then as above. The code is stored only as a hash. |
 
-Every request must carry a valid `X-Twilio-Signature` when `TWILIO_AUTH_TOKEN` is set. Without
-it (development only) the endpoints accept unsigned requests, so they can be tried with curl:
+- One account per number: `User.phone` and `User.email` are unique in Postgres, so concurrent
+  calls from the same number create one account (the others are told it already exists).
+- The confirmation SMS is sent in the background. If it fails (e.g. Twilio blocked), the
+  failure is logged and the call still ends normally.
+- If the database fails, the caller hears "Sorry, we could not create your account right
+  now…" and the call ends; the error is logged, not spoken.
 
-```bash
-curl -X POST localhost:3000/twilio/voice/menu -d From=+919876543210 -d Digits=1
-curl -X POST localhost:3000/twilio/sms -d From=+919876543210 -d Body=JOIN
+On a Twilio **trial** account custom SMS text is blocked (error 572006); only Twilio's predefined
+templates can be sent. New-email alerts and sign-up confirmations then fall back to the template
+named in `TWILIO_TRIAL_SMS_TEMPLATE` (default `sms_account_alerts`; others include
+`sms_event_notifications`, `sms_2fa`). OTPs are unaffected: Twilio Verify uses its own template.
+
+### Environment variables (`backend/.env`)
+
+| Variable | Used for |
+|---|---|
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` | Sending SMS/calls; the token also checks webhook signatures. Never sent to the apps or logged. |
+| `TWILIO_FROM_NUMBER` | Number the confirmation SMS is sent from. Empty (dev only) → SMS and OTPs are printed in the backend log instead. |
+| `TWILIO_WEBHOOK_BASE_URL` | Public URL Twilio calls, e.g. `https://abc123.ngrok-free.app`. Needed for signature checks behind a tunnel. |
+| `TWILIO_VERIFY_SERVICE_SID`, `TWILIO_MESSAGING_SERVICE_SID` | Optional, unchanged. |
+
+### Testing the call flow locally (no real call)
+
+Start the backend (`cd backend`, `npm run start:dev`), then in a second terminal:
+
+```powershell
+cd backend
+npm run twilio:webhook -- /twilio/voice From=+919876543210
+npm run twilio:webhook -- /twilio/voice/menu From=+919876543210 Digits=2
+npm run twilio:webhook -- /twilio/voice/menu From=+919876543210 Digits=7
+npm run twilio:webhook -- /twilio/voice/menu From=+919876543210 Digits=1
+npm run twilio:webhook -- /twilio/sms From=+919876543210 Body=JOIN
 ```
+
+The script sends the same form fields Twilio would, signed with your `TWILIO_AUTH_TOKEN`, to
+`localhost`, and prints the TwiML the backend returns. It is a local HTTP request only; no call is
+placed. (In Git Bash, prefix it with `MSYS_NO_PATHCONV=1` so `/twilio/...` isn't turned into a
+Windows path.) `Digits=1` creates a real account in your dev database. The automated tests cover
+the same flow: `npm run test:e2e -- telephony`.
+
+Every request must carry a valid `X-Twilio-Signature` when `TWILIO_AUTH_TOKEN` is set. Without a
+token (development only) unsigned requests are accepted, so plain `curl -X POST
+localhost:3000/twilio/voice/menu -d From=+919876543210 -d Digits=1` also works.
+
+### Connecting the Twilio number
+
+Needs an active Twilio account with an approved Trust Hub (KYC) profile.
+
+1. Start the backend: `cd backend`, `npm run start:dev` (port 3000).
+2. Start a tunnel: `ngrok http 3000`. Copy the `https://….ngrok-free.app` URL it prints.
+3. Put it in `backend/.env` as `TWILIO_WEBHOOK_BASE_URL=https://….ngrok-free.app` (no trailing
+   slash) and restart the backend. The free ngrok URL changes every time ngrok restarts; update
+   both this and step 4 when it does.
+4. Twilio Console → Phone Numbers → Manage → Active numbers → your number:
+   - Voice → *A call comes in* → Webhook, `https://….ngrok-free.app/twilio/voice`, HTTP `POST`
+   - Messaging → *A message comes in* → Webhook, `https://….ngrok-free.app/twilio/sms`, HTTP `POST`
+   - Save.
+5. Set `TWILIO_FROM_NUMBER` to that number so the confirmation SMS is really sent.
+6. Call the number from an Indian mobile and press 1.
+
+If Twilio's debugger shows 403 on the webhook, the signature check failed: `TWILIO_WEBHOOK_BASE_URL`
+doesn't match the URL configured on the number, or `TWILIO_AUTH_TOKEN` is from another account.
 
 ## Sending email (`POST /email/send`)
 

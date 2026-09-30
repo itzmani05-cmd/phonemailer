@@ -1,5 +1,8 @@
+import { existsSync } from 'node:fs';
 import { SMTPServer } from 'smtp-server';
 import { simpleParser } from 'mailparser';
+
+if (existsSync('.env')) process.loadEnvFile('.env');
 
 const SMTP_PORT = Number(process.env.SMTP_PORT ?? 2525);
 const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:3000';

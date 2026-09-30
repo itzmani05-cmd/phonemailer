@@ -28,7 +28,8 @@ export default function VerifyScreen() {
   const t = useT()
   const errorMessage = (err: unknown) => (err instanceof ApiError ? err.message : t('common.offline'))
   const { signIn } = useAuth()
-  const params = useLocalSearchParams<{ phone: string; resendIn?: string }>()
+  const params = useLocalSearchParams<{ phone: string; resendIn?: string; channel?: string }>()
+  const [channel, setChannel] = useState(params.channel === 'voice' ? 'voice' : 'sms')
   const phone = params.phone ?? ''
   const input = useRef<RNTextInput>(null)
   const [code, setCode] = useState('')
@@ -75,6 +76,7 @@ export default function VerifyScreen() {
     try {
       const res = await api.requestOtp(phone)
       setWait(res.resendIn)
+      setChannel(res.channel)
       setNotice(t('verify.newCode'))
     } catch (err) {
       if (err instanceof ApiError && err.retryAfter) setWait(err.retryAfter)
@@ -93,7 +95,7 @@ export default function VerifyScreen() {
         <View style={styles.content}>
           <Text style={[styles.title, { color: colors.text }]}>{t('verify.title')}</Text>
           <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-            {t('verify.sent', { n: CODE_LENGTH })}{' '}
+            {t(channel === 'voice' ? 'verify.callingTo' : 'verify.sent', { n: CODE_LENGTH })}{' '}
             <Text style={{ color: colors.text, fontWeight: '600' }}>{formatPhone(phone, '91')}</Text>
           </Text>
           <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={8}>

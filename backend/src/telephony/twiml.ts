@@ -22,9 +22,6 @@ export const gather = (options: {
 }) =>
   `<Gather input="dtmf" numDigits="${options.digits}" timeout="${options.timeout ?? 8}" action="${escape(options.action)}" method="POST">${say(options.prompt)}</Gather>`;
 
-export const redirect = (url: string) =>
-  `<Redirect method="POST">${escape(url)}</Redirect>`;
-
 export const hangup = () => '<Hangup/>';
 
 export const message = (text: string) => `<Message>${escape(text)}</Message>`;

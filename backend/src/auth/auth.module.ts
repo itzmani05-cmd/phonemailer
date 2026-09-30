@@ -10,6 +10,7 @@ import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { SmsService } from './sms.service';
 import { TwilioVerifyService } from './verify.service';
+import { VoiceCallService } from './voice-call.service';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { TwilioVerifyService } from './verify.service';
     OtpService,
     SmsService,
     TwilioVerifyService,
+    VoiceCallService,
     JwtAuthGuard,
     ApiAuthGuard,
     MailboxGuard,

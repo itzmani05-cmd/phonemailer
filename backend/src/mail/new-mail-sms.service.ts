@@ -28,7 +28,9 @@ export class NewMailSmsService {
     if (!owner.phone || owner.mobileAppAt) return;
     const to = owner.phone;
     this.sms
-      .send(to, NewMailSmsService.message(mail.fromHeader, mail.subject))
+      .send(to, NewMailSmsService.message(mail.fromHeader, mail.subject), {
+        trialFallback: true,
+      })
       .catch((err: Error) =>
         this.logger.warn(`New-mail SMS to ${to} failed: ${err.message}`),
       );

@@ -27,6 +27,7 @@ export function PhoneOtpForm({ onVerified, aboveButton }: Props) {
   const [digits, setDigits] = useState('')
   const [code, setCode] = useState('')
   const [sent, setSent] = useState(false)
+  const [channel, setChannel] = useState<'sms' | 'voice'>('sms')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -53,6 +54,7 @@ export function PhoneOtpForm({ onVerified, aboveButton }: Props) {
     try {
       const res = await publicApi.requestOtp(digits)
       setWait(res.resendIn)
+      setChannel(res.channel)
       setSent(true)
       setNotice(null)
       setTimeout(() => codeInput.current?.focus())
@@ -156,7 +158,10 @@ export function PhoneOtpForm({ onVerified, aboveButton }: Props) {
         {error ? (
           <p className="auth-error">{error}</p>
         ) : sent ? (
-          <p>{notice ?? t('web.otpHint', { phone: formatPhone(digits, '91') })}</p>
+          <p>
+            {notice ??
+              t(channel === 'voice' ? 'web.otpCallHint' : 'web.otpHint', { phone: formatPhone(digits, '91') })}
+          </p>
         ) : isValidMobile(digits) ? (
           <p>
             {t('signIn.addressWillBe')} <strong>

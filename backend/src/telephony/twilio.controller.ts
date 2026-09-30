@@ -18,7 +18,6 @@ import {
   hangup,
   message,
   pause,
-  redirect,
   response,
   say,
   spellDigits,
@@ -45,31 +44,22 @@ export class TwilioController {
   @HttpCode(200)
   @Header('Content-Type', 'text/xml')
   welcome() {
-    return response(
-      gather({
-        action: '/twilio/voice/menu',
-        digits: 1,
-        prompt:
-          'Welcome to PhoneMail, where your phone number is your email address. To create your PhoneMail account, press 1.',
-      }),
-      say('We did not receive a choice. Please call again. Goodbye.'),
-      hangup(),
-    );
+    return response(this.mainMenu());
   }
 
   @Post('voice/menu')
   @HttpCode(200)
   @Header('Content-Type', 'text/xml')
   async menu(@Body() body: TwilioParams) {
+    if (body.Digits === '2') return response(this.mainMenu());
     if (body.Digits !== '1') {
       return response(
-        say('Sorry, that is not a valid option.'),
-        redirect('/twilio/voice'),
+        say('Invalid option. Please try again.'),
+        this.mainMenu(),
       );
     }
     const phone = parsePhone(body.From ?? '');
-    if (phone)
-      return this.created(phone, await this.signup.signUp(phone, 'call'));
+    if (phone) return this.register(phone);
     return response(this.askNumber());
   }
 
@@ -85,7 +75,7 @@ export class TwilioController {
       );
     }
     try {
-      await this.otp.request(phone.e164);
+      await this.otp.request(phone.e164, 'sms');
     } catch (err) {
       this.logger.warn(
         `Call OTP for ${phone.e164} failed: ${(err as Error).message}`,
@@ -124,7 +114,7 @@ export class TwilioController {
         this.askCode(phone, false),
       );
     }
-    return this.created(phone, await this.signup.signUp(phone, 'call'));
+    return this.register(phone);
   }
 
   @Post('sms')
@@ -148,23 +138,49 @@ export class TwilioController {
       );
     }
     const result = await this.signup.signUp(phone, 'sms');
-    return response(message(this.signup.confirmationText(result)));
+    this.signup.textConfirmation(phone, result);
+    return response();
   }
 
-  private created(phone: Phone, result: SignupResult) {
+  private mainMenu() {
+    return (
+      gather({
+        action: '/twilio/voice/menu',
+        digits: 1,
+        prompt:
+          'Welcome to PhoneMail, where your phone number is your email address. Press 1 to create an account. Press 2 to hear the options again.',
+      }) +
+      say('We did not receive a choice. Please call again. Goodbye.') +
+      hangup()
+    );
+  }
+
+  private async register(phone: Phone) {
+    let result: SignupResult;
+    try {
+      result = await this.signup.signUp(phone, 'call');
+    } catch (err) {
+      this.logger.error(
+        `Call sign-up for ${phone.e164} failed: ${(err as Error).message}`,
+      );
+      return response(
+        say(
+          'Sorry, we could not create your account right now. Please try again later. Goodbye.',
+        ),
+        hangup(),
+      );
+    }
     this.signup.textConfirmation(phone, result);
     const spoken = spokenAddress(phone.national, domain());
     return response(
       say(
         result.isNewUser
-          ? `Your PhoneMail account is ready. Your email address is ${spoken}.`
-          : `You already have a PhoneMail account. Your email address is ${spoken}.`,
+          ? `Your registration was successful. Your PhoneMail email address is ${spoken}.`
+          : `An account already exists for this number. Your PhoneMail email address is ${spoken}.`,
       ),
       pause(1),
-      say(
-        `Again, your address is ${spoken}. We have also sent it to you by SMS.`,
-      ),
-      say('Thank you for calling PhoneMail. Goodbye.'),
+      say(`Again, your address is ${spoken}.`),
+      say('You will receive a confirmation message shortly. Goodbye.'),
       hangup(),
     );
   }

@@ -31,7 +31,7 @@ export class TwilioSignatureGuard implements CanActivate {
     }
 
     const base = (
-      process.env.TWILIO_WEBHOOK_BASE_URL ??
+      process.env.TWILIO_WEBHOOK_BASE_URL ||
       `${req.protocol}://${req.get('host')}`
     ).replace(/\/$/, '');
     const params = Object.fromEntries(

@@ -97,11 +97,28 @@ p {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--color-text) 5%, transparent);
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.icon-button,
+.nav-item,
+.menu-item,
+.tab,
+.pill-button,
+.compose-button,
+.send-button,
+.primary-button,
+.settings-option {
+  transition: background-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.compose-fab {
+  display: none;
 }
 
 .scrim {
@@ -361,6 +378,7 @@ p {
   color: var(--color-on-primary);
   font-size: calc(16px * var(--font-scale));
   font-weight: 500;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary) 28%, transparent);
 }
 
 .compose-button:hover {
@@ -542,8 +560,8 @@ p {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 552px;
-  max-width: 100%;
+  flex: 0 1 552px;
+  min-width: 0;
   height: 43px;
   padding: 0 8px 0 16px;
   border-radius: var(--radius-full);
@@ -558,6 +576,7 @@ p {
 
 .search input {
   flex: 1;
+  width: 100%;
   min-width: 0;
   border: 0;
   outline: 0;
@@ -719,16 +738,17 @@ p {
 .list-toolbar {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 4px;
   height: 54px;
-  padding: 0 16px 0 24px;
+  padding: 0 12px 0 24px;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .select-all {
   display: flex;
   align-items: center;
   gap: 2px;
-  margin-right: 50px;
+  margin-right: 8px;
 }
 
 .select-caret {
@@ -747,7 +767,6 @@ p {
 .bulk-actions {
   display: flex;
   gap: 2px;
-  margin-left: -40px;
 }
 
 .pager {
@@ -780,15 +799,20 @@ p {
 .mail-row {
   display: flex;
   align-items: flex-start;
-  padding: 10px 18px 10px 24px;
+  padding: 12px 18px 12px 24px;
   line-height: 1.38;
   border-bottom: 1px solid var(--color-border);
   cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.mail-row[aria-selected='true'] {
+  box-shadow: inset 3px 0 0 var(--color-primary);
 }
 
 .mail-row .checkbox {
   margin-top: 9px;
-  margin-right: 34px;
+  margin-right: 18px;
 }
 
 .mail-row .avatar {
@@ -1340,12 +1364,78 @@ p {
   }
 
   .content {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
     padding: 0 16px 16px;
+  }
+
+  .compose-fab {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 35;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    height: 54px;
+    padding: 0 22px 0 18px;
+    border-radius: 16px;
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    font-weight: 600;
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--color-primary) 35%, transparent);
+    transition: background-color 0.12s ease;
+  }
+
+  .compose-fab:hover {
+    background: var(--color-primary-hover);
+  }
+
+  .mail-list {
+    padding-bottom: 88px;
+  }
+
+  .sender {
+    flex-wrap: wrap;
+  }
+
+  .sender-address {
+    overflow-wrap: normal;
+    word-break: break-word;
+  }
+
+  .sender-date {
+    order: 3;
+    width: 100%;
+    margin: 0 0 0 56px;
+  }
+
+  .reply-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 28px;
+  }
+
+  .pill-button {
+    justify-content: center;
+    gap: 8px;
+    height: 44px;
+    padding: 0 8px;
+    font-size: calc(14.5px * var(--font-scale));
+  }
+}
+
+@media (max-width: 860px) {
+  .content {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .app[data-view='list'] .reader-pane,
   .app[data-view='reader'] .list-pane {
+    display: none;
+  }
+
+  .app[data-view='reader'] .compose-fab {
     display: none;
   }
 }
@@ -1362,17 +1452,33 @@ p {
   }
 
   .address-pill,
-  .bell {
+  .bell,
+  .topbar-right > .topbar-icon {
     display: none;
   }
 
+  .topbar-right {
+    gap: 4px;
+  }
+
   .content {
-    padding: 0 8px 8px;
+    padding: 0;
+  }
+
+  .panel {
+    border-width: 1px 0 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .tabs {
     gap: 0;
     padding: 0 4px;
+  }
+
+  .compose-fab {
+    right: 16px;
+    bottom: 16px;
   }
 
   .tab {
@@ -1421,14 +1527,8 @@ p {
     font-size: calc(21px * var(--font-scale));
   }
 
-  .sender {
-    flex-wrap: wrap;
-  }
-
-  .sender-date {
-    order: 3;
+  .attachment-card {
     width: 100%;
-    margin: 0 0 0 60px;
   }
 
   .compose {
@@ -1848,6 +1948,16 @@ p {
 
 .signout-button:hover {
   background: var(--color-danger-soft);
+}
+
+@media (max-width: 480px) {
+  .tab svg {
+    display: none;
+  }
+
+  .mail-row .avatar {
+    margin-right: 12px;
+  }
 }
 
 @media (max-width: 720px) {

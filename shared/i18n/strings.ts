@@ -161,6 +161,8 @@ const en = {
   'web.theme': 'Theme',
   'web.goToMail': 'Open PhoneMail',
   'web.registerLink': 'Create an account for someone else',
+  'verify.callingTo': 'We’re calling you to read out a {n}-digit code at',
+  'web.otpCallHint': 'We’re calling {phone} now. Enter the 6-digit code you hear.',
 }
 
 export type StringKey = keyof typeof en
@@ -320,6 +322,8 @@ const ta: Record<StringKey, string> = {
   'web.theme': 'தீம்',
   'web.goToMail': 'PhoneMail-ஐத் திற',
   'web.registerLink': 'வேறொருவருக்குக் கணக்கை உருவாக்கு',
+  'verify.callingTo': '{n} இலக்கக் குறியீட்டைச் சொல்ல இந்த எண்ணுக்கு அழைக்கிறோம்:',
+  'web.otpCallHint': '{phone} எண்ணுக்கு இப்போது அழைக்கிறோம். நீங்கள் கேட்கும் 6 இலக்கக் குறியீட்டை உள்ளிடவும்.',
 }
 
 const hi: Record<StringKey, string> = {
@@ -477,6 +481,8 @@ const hi: Record<StringKey, string> = {
   'web.theme': 'थीम',
   'web.goToMail': 'PhoneMail खोलें',
   'web.registerLink': 'किसी और के लिए खाता बनाएँ',
+  'verify.callingTo': 'हम {n} अंकों का कोड बताने के लिए इस नंबर पर कॉल कर रहे हैं:',
+  'web.otpCallHint': 'हम अभी {phone} पर कॉल कर रहे हैं। सुनाई देने वाला 6 अंकों का कोड दर्ज करें।',
 }
 
 export const STRINGS: Record<Language, Record<StringKey, string>> = { en, ta, hi }

@@ -46,10 +46,11 @@ export class AuthService {
 
   async requestOtp(dto: RequestOtpDto) {
     const phone = this.parse(dto);
-    await this.otp.request(phone.e164);
+    const channel = await this.otp.request(phone.e164);
     return {
       success: true,
       phone: phone.e164,
+      channel,
       expiresIn: OTP_TTL_SECONDS,
       resendIn: RESEND_COOLDOWN_SECONDS,
     };

@@ -17,9 +17,9 @@ Legend: ✅ done · 🟡 partly done · ❌ not started
 | Receiving email (mail-server → `POST /mail/inbound`) | ✅ | MailParser → backend looks up `<number>@MAIL_DOMAIN` → copy saved in that user's mailbox (Postgres). Unknown users get SMTP 550; other domains 550 (not a relay). |
 | Per-user mailbox (`/mail`, `/labels`) | ✅ | Scoped to the signed-in user; attachments and labels stored in Postgres. Dev-only fallback to the `ACCOUNT_PHONE` mailbox for clients without sign-in (web). |
 | PhoneMail → PhoneMail sending | ✅ | Delivered straight into the recipient's inbox, no Gmail relay, so From is the real PhoneMail address. |
-| Correct "From" address on mail to outside addresses | 🟡 | Gmail SMTP rewrites From to the Gmail account. Fine between PhoneMail users (local delivery). |
+| Correct "From" address on mail to outside addresses | ✅ | Sent through Resend with the verified domain `mail.manidevfolio.site`; test mail to Gmail delivered from `6369925623@mail.manidevfolio.site`. Existing accounts need `User.email` moved to the new domain. |
 | Drafts / Spam / Trash / Favorites (starred) | 🟡 | Folder + starred stored per message in Postgres; saving drafts from the apps not built yet. |
-| SMS notification on new email | ✅ | "You have received an email from <Sender>. Subject: <Subject>." sent via Twilio for users without the app (`User.mobileAppAt` unset; set when the mobile app signs in or opens). Real SMS needs Twilio credit; dev mode logs it. |
+| SMS notification on new email | ✅ | "You have received an email from <Sender>. Subject: <Subject>." sent via Twilio for users without the app (`User.mobileAppAt` unset; set when the mobile app signs in or opens). Real SMS needs Twilio credit; dev mode logs it. On a trial account it falls back to a Twilio predefined template (`TWILIO_TRIAL_SMS_TEMPLATE`), as the brief allows. |
 | Toll-free IVR sign-up (call, press 1) | ✅ | `POST /twilio/voice` → press 1 → account for caller ID, address read out + SMS. No/foreign caller ID → keypad number + SMS code. Signature-checked. Live calls need Twilio credit + public URL (README). |
 | Sign-up by SMS | ✅ | `POST /twilio/sms`: text JOIN → account + address in the reply. |
 | Alias IDs | ✅ | `Alias` table; `POST/DELETE /account/aliases`; mail to alias@domain reaches the owner. Receive-only (sending as an alias not built). |
@@ -72,5 +72,5 @@ Brief says **prioritise the mobile client**, so mobile blocks come first after t
 10. **README + demo**: document everything; screenshots of mobile and web.
 
 ## 3. Open questions / blockers
-- **Twilio**: trial expired (error 60628). Needed for real OTP, SMS notifications and IVR. Old credentials backed up outside the repo.
-- **Domain**: `phonemail.com` is not ours, so internet mail to `…@phonemail.com` cannot arrive. Demo receiving locally (send to mail-server on port 2525) or use an owned domain.
+- **Twilio**: account upgraded 2026-09-29 but blocked (401, error 20003) until the Trust Hub KYC profile is approved. OTPs and SMS are printed in the backend log meanwhile (`TWILIO_FROM_NUMBER` empty). IVR logic is tested locally (`npm run twilio:webhook`), not with a real call.
+- **Domain**: sending uses `mail.manidevfolio.site` (DNS at Hostinger, verified in Resend). Receiving internet mail at it still needs an MX record to a public mail-server or an inbound-email service; locally, send to the mail-server on port 2525.

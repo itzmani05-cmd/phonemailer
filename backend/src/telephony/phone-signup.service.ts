@@ -34,7 +34,7 @@ export class PhoneSignupService {
 
   textConfirmation(phone: Phone, result: SignupResult): void {
     this.sms
-      .send(phone.e164, this.confirmationText(result))
+      .send(phone.e164, this.confirmationText(result), { trialFallback: true })
       .catch((err: Error) =>
         this.logger.warn(`Sign-up SMS to ${phone.e164} failed: ${err.message}`),
       );

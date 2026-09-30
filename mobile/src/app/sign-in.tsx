@@ -82,7 +82,10 @@ export default function SignInScreen() {
     setError(null)
     try {
       const res = await api.requestOtp(digits, COUNTRY.dialCode)
-      router.push({ pathname: '/verify', params: { phone: digits, resendIn: String(res.resendIn) } })
+      router.push({
+        pathname: '/verify',
+        params: { phone: digits, resendIn: String(res.resendIn), channel: res.channel },
+      })
     } catch (err) {
       if (err instanceof ApiError && err.status === 429 && err.retryAfter) {
         router.push({ pathname: '/verify', params: { phone: digits, resendIn: String(err.retryAfter) } })

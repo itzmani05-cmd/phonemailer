@@ -8,11 +8,17 @@ import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from './sms.service';
 import { TwilioVerifyService } from './verify.service';
+import { VoiceCallService } from './voice-call.service';
 
 export const OTP_TTL_SECONDS = 5 * 60;
 export const RESEND_COOLDOWN_SECONDS = 30;
 const MAX_REQUESTS_PER_HOUR = 5;
 const MAX_ATTEMPTS = 5;
+
+export type OtpChannel = 'sms' | 'voice';
+
+export const otpChannel = (): OtpChannel =>
+  process.env.OTP_CHANNEL === 'voice' ? 'voice' : 'sms';
 
 function tooManyRequests(message: string, retryAfter?: number) {
   return new HttpException(
@@ -27,6 +33,7 @@ export class OtpService {
     private readonly prisma: PrismaService,
     private readonly sms: SmsService,
     private readonly verifyApi: TwilioVerifyService,
+    private readonly voice: VoiceCallService,
   ) {}
 
   private hash(phone: string, code: string): string {
@@ -36,7 +43,10 @@ export class OtpService {
       .digest('hex');
   }
 
-  async request(phone: string): Promise<void> {
+  async request(
+    phone: string,
+    channel: OtpChannel = otpChannel(),
+  ): Promise<OtpChannel> {
     const now = Date.now();
     const recent = await this.prisma.otpCode.findMany({
       where: { phone, createdAt: { gt: new Date(now - 60 * 60 * 1000) } },
@@ -57,7 +67,7 @@ export class OtpService {
       throw tooManyRequests('Too many codes requested. Try again later.');
     }
 
-    const viaVerify = this.verifyApi.configured;
+    const viaVerify = channel === 'sms' && this.verifyApi.configured;
     const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
     await this.prisma.otpCode.updateMany({
       where: { phone, consumedAt: null },
@@ -78,7 +88,17 @@ export class OtpService {
         await this.prisma.otpCode.delete({ where: { id: otp.id } });
         throw err;
       }
-      return;
+      return channel;
+    }
+
+    if (channel === 'voice') {
+      try {
+        await this.voice.speakCode(phone, code);
+      } catch (err) {
+        await this.prisma.otpCode.delete({ where: { id: otp.id } });
+        throw err;
+      }
+      return channel;
     }
 
     let body = `${code} is your PhoneMail verification code. It expires in ${OTP_TTL_SECONDS / 60} minutes. Do not share it with anyone.`;
@@ -91,6 +111,7 @@ export class OtpService {
       await this.prisma.otpCode.delete({ where: { id: otp.id } });
       throw err;
     }
+    return channel;
   }
 
   async verify(phone: string, code: string): Promise<void> {

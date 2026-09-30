@@ -10,6 +10,7 @@ import {
 } from '@shared/mail'
 import { useEffect, useMemo, useState } from 'react'
 import { Compose } from './components/Compose'
+import { Icon } from './components/Icon'
 import { MailList, PAGE_SIZE } from './components/MailList'
 import { MailReader } from './components/MailReader'
 import { Settings } from './components/Settings'
@@ -229,6 +230,13 @@ const App = () => {
           </div>
         )}
       </div>
+
+      {!compose && screen === 'mail' && (
+        <button className="compose-fab" onClick={() => openCompose(EMPTY_DRAFT)}>
+          <Icon name="pencil" size={18} />
+          <span>Compose</span>
+        </button>
+      )}
 
       {compose && (
         <Compose key={composeKey} draft={compose} onClose={() => setCompose(null)} onSend={box.send} />

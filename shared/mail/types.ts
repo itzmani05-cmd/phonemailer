@@ -66,6 +66,7 @@ export interface AuthUser {
 export interface OtpRequestResult {
   success: true
   phone: string
+  channel: 'sms' | 'voice'
   expiresIn: number
   resendIn: number
 }
